@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Live Leaderboard</title>
+    <link rel="stylesheet" href="style.css" />
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css"
+    />
+  </head>
+  <body>
+    <div class="cyber-bg-ambient"></div>
+
+    <div class="bullet-echo-container">
+      <div class="cyber-panel leaderboard-panel">
+        <div class="cyber-grid-bg"></div>
+        <div class="cyber-corner-accent top-left"></div>
+        <div class="cyber-corner-accent bottom-right"></div>
+
+        <div class="cyber-sparkle sparkle-l1"></div>
+        <div class="cyber-sparkle sparkle-l2"></div>
+
+        <div class="cyber-header">
+          <div class="cyber-title-area">
+            <h1 class="cyber-hero-name">LEADERBOARD</h1>
+            <div class="cyber-tag-wrapper">
+              <span class="cyber-tag tag-golden">200 bucks</span>
+              <span class="cyber-tag tag-cyan">100 bucks</span>
+            </div>
+          </div>
+          <div class="cyber-deco-bar"></div>
+        </div>
+
+        <div class="leaderboard-list" id="leaderboard-data"></div>
+      </div>
+    </div>
+
+    <script>
+      //{ name: "", points: [] }
+      const playersData = [
+        {
+          name: "nustclips",
+          points: [
+            3, 3, 3, 3, 3, 3, 2, 1, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 2, 2, 3, 3, 2,
+            2,
+          ],
+        },
+        { name: "turtletit", points: [2, 2, 1, 2, 1, 3, 3, 3, 1, 2, 1, 3] },
+        { name: "ChandanaMondal", points: [1, 1] },
+        { name: "W-rw5lt", points: [3] },
+        {
+          name: "Adharsh",
+          points: [1, 2, 1, 2, 2, 2, 2, 2, 2, 3, 1, 1, 2, 1, 1, 3, 1, 1, 1, 1],
+        },
+        { name: "Unknown", points: [3, 3, 1, 2] },
+        { name: "Vincent Black", points: [1] },
+        { name: "Mr Toxic", points: [2, 2, 3, 2, 1, 1] },
+        { name: "Kebechet", points: [2, 1, 3, 3, 3, 2, 3, 2, 1, 3] },
+        { name: "rushikale", points: [3, 2, 2, 3, 2] },
+        { name: "islom", points: [3, 1] },
+        { name: "Z-zd4mx", points: [3, 1] },
+        { name: "masteredultrainstinctkameh9750", points: [3, 2, 3] },
+      ];
+
+      function generateLeaderboard() {
+        const container = document.getElementById("leaderboard-data");
+        if (!container) return;
+
+        const processedPlayers = playersData.map((player) => {
+          const totalPoints = player.points.reduce(
+            (sum, current) => sum + current,
+            0,
+          );
+          return {
+            name: player.name,
+            totalPoints: totalPoints,
+          };
+        });
+
+        processedPlayers.sort((a, b) => b.totalPoints - a.totalPoints);
+
+        let htmlContent = "";
+
+        let maxVisiblePlayersAmount = 6;
+        let iterationNumber = 0;
+        processedPlayers.forEach((player, index) => {
+          if (maxVisiblePlayersAmount <= iterationNumber) return;
+          iterationNumber++;
+          const rank = index + 1;
+          let rankClass = "";
+          let crownSparkle = "";
+
+          if (rank === 1) {
+            rankClass = "rank-1";
+
+            crownSparkle = '<span class="cyber-crown"></span>';
+          } else if (rank === 2 || rank === 3) {
+            rankClass = "rank-2";
+          }
+
+          const formattedRank = rank < 10 ? `0${rank}` : rank;
+          const formattedPoints = player.totalPoints.toLocaleString();
+
+          htmlContent += `
+                  <div class="leaderboard-row ${rankClass}">
+                    <div class="row-indicator"></div>
+                    <div class="player-rank">${formattedRank}</div>
+                    <div class="player-info">
+                      <span class="player-name">${player.name} ${crownSparkle}</span>
+                    </div>
+                    <div class="player-score">
+                      <span class="score-val">${formattedPoints}</span>
+                      <span class="score-label">PTS</span>
+                    </div>
+                  </div>
+                `;
+        });
+
+        container.innerHTML = htmlContent;
+      }
+
+      document.addEventListener("DOMContentLoaded", generateLeaderboard);
+    </script>
+  </body>
+</html>

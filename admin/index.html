@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Live Leaderboard</title>
+    <link rel="stylesheet" href="../style.css" />
+    <link rel="stylesheet" href="./admin.css" />
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css"
+    />
+  </head>
+  <body>
+    <div class="cyber-bg-ambient"></div>
+
+    <div id="new-player-form-container" class="popup panel hidden">
+      <div id="new-player-form-content" class="content">
+        <h2>New player</h2>
+        <form id="new-player-form">
+          <input
+            type="text"
+            name="new-player-name"
+            id="new-player-name"
+            required
+            placeholder="Player name..."
+          />
+          <input
+            type="text"
+            name="new-player-id"
+            id="new-player-id"
+            placeholder="(opt) Player in-game id..."
+          />
+          <input type="hidden" name="team-id" id="team-id" />
+          <button
+            type="submit"
+            id="new-player-submit-btn"
+            class="action-button"
+          >
+            Add player
+          </button>
+          <button id="cancel-new-player" class="action-button">Cancel</button>
+        </form>
+      </div>
+    </div>
+
+    <div id="new-battle-form-container" class="popup panel hidden">
+      <div id="new-battle-form-content" class="content">
+        <h2>New battle</h2>
+        <p>Select <strong>two</strong> teams to begin</p>
+        <div id="team-select-grid"></div>
+        <button id="begin-battle-btn" class="action-button">Begin battle</button
+        ><button id="cancel-battle-btn" class="action-button">Cancel</button>
+      </div>
+    </div>
+
+    <div class="bullet-echo-container">
+      <div id="login-panel" class="panel hidden">
+        <h1>Admin panel</h1>
+        <hr />
+
+        <div id="login-form">
+          <p>[ i ] Login and Password are given by administrator.</p>
+          <input
+            type="email"
+            name="email-input"
+            id="email-input"
+            required
+            placeholder="Email..."
+          />
+          <input
+            type="password"
+            name="password-input"
+            id="password-input"
+            placeholder="Password..."
+          />
+          <button id="login-btn" class="action-button">Login</button>
+          <p id="error-msg"></p>
+        </div>
+      </div>
+
+      <div id="admin-panel" class="hidden panel">
+        hidden admin panel (you should not be able to see this)
+      </div>
+
+      <div id="teams-panel" class="hidden panel">
+        <h1>Teams</h1>
+        <div class="buttons-container">
+          <button id="add-team-btn" class="action-button">
+            Create empty team
+          </button>
+          <button class="back-to-admin-btn action-button">Go back</button>
+        </div>
+        <div id="teams-list" class="list-div"></div>
+      </div>
+
+      <div id="battles-panel" class="hidden panel">
+        <h1>Teams</h1>
+        <div class="buttons-container">
+          <button class="action-button" id="add-battle-btn">
+            Create battle
+          </button>
+          <button class="back-to-admin-btn action-button">Go back</button>
+        </div>
+        <div id="battles-list" class="list-div"></div>
+      </div>
+
+      <!---->
+    </div>
+
+    <script type="module" src="./script.js"></script>
+  </body>
+</html>
