@@ -468,3 +468,54 @@ body {
 .hidden {
   display: none !important;
 }
+
+/* * * */
+
+.color-box {
+  width: 100px;
+  height: 100px;
+}
+
+#colors {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+#colors p {
+  color: white;
+}
+
+.gradient-box {
+  width: 300px;
+  height: 300px;
+  background: conic-gradient(
+    from 0deg,
+    /*
+    Top / Start
+    Right
+    Bottom
+    Left
+    Top / End
+    */ #b4adff 0deg,
+    #58ffff 90deg,
+    #b4adff 180deg,
+    #ff48ff 270deg,
+    #b4adff 360deg
+  );
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  border-radius: 50%;
+}
+
+.indigo-circle {
+  width: 90%;
+  height: 90%;
+  background: radial-gradient(circle, rgba(0, 0, 0) 40%, rgb(10, 15, 142) 70%);
+  border: 5px solid white;
+  border-radius: 50%;
+  filter: drop-shadow(0px 0px 10px white);
+}
