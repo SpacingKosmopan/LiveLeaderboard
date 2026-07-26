@@ -1,0 +1,21 @@
+body {
+  background: #000;
+  display: grid;
+  place-items: center;
+  height: 100vh;
+}
+
+.sigil {
+  width: 450px;
+}
+
+.ring,
+.line {
+  fill: none;
+  stroke: url(#grad);
+  stroke-width: 4;
+  stroke-linecap: round;
+
+  filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 10px #7a5cff)
+    drop-shadow(0 0 20px #2c3cff) drop-shadow(0 0 35px #00d9ff);
+}
