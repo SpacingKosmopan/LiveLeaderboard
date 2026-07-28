@@ -17,6 +17,10 @@ import {
   updateDoc, // update
   arrayUnion,
   deleteDoc, // delete
+  query,
+  where,
+  count,
+  getCountFromServer,
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 //#endregion
@@ -83,15 +87,27 @@ const PANELS = {
   createBattle: document.querySelector("#new-battle-form-container"),
 };
 
-document.querySelectorAll(".back-to-admin-btn").forEach((b) =>
-  b.addEventListener("click", () => {
-    document
-      .querySelectorAll(".panel")
-      .forEach((p) => p.classList.add("hidden"));
+addEventListener("DOMContentLoaded", (event) => {
+  document.querySelectorAll(".back-to-tournament-btn").forEach((b) =>
+    b.addEventListener("click", () => {
+      document
+        .querySelectorAll(".panel")
+        .forEach((p) => p.classList.add("hidden"));
 
-    PANELS.tournamentPanel.classList.remove("hidden");
-  }),
-);
+      PANELS.tournamentPanel.classList.remove("hidden");
+    }),
+  );
+
+  document.querySelectorAll(".back-to-admin-btn").forEach((b) =>
+    b.addEventListener("click", () => {
+      document
+        .querySelectorAll(".panel")
+        .forEach((p) => p.classList.add("hidden"));
+
+      PANELS.adminPanel.classList.remove("hidden");
+    }),
+  );
+});
 
 let loggedUser = null;
 
@@ -154,7 +170,6 @@ onAuthStateChanged(auth, (user) => {
 async function showAllTournaments() {
   try {
     const tournamentsRef = collection(db, "tournaments");
-
     const querySnapshot = await getDocs(tournamentsRef);
 
     const tournamentsTable = document.querySelector("#tournaments-table");
@@ -163,15 +178,28 @@ async function showAllTournaments() {
       return;
     }
     const tableBody = tournamentsTable.querySelector("tbody");
+    tableBody.innerHTML = "";
 
-    querySnapshot.forEach((doc) => {
+    // for...of can do await
+    for (const doc of querySnapshot.docs) {
       const tournamentData = doc.data();
+
+      const battlesRef = collection(db, "battles");
+      const battlesQuery = query(
+        battlesRef,
+        where("tournamentId", "==", doc.id),
+      );
+
+      const countSnapshot = await getCountFromServer(battlesQuery);
+      const battlesCount = countSnapshot.data().count;
 
       const tRow = document.createElement("tr");
       tRow.innerHTML = /*html*/ `
-        <td>${{ tournamentData }}</td>
+        <td>${tournamentData.name}</td>
+        <td>${tournamentData.createdAt.toDate().toLocaleString("en-EN")}</td>
+        <td>${battlesCount}</td> 
         <td>
-          <button class="edit-tournament-button small-action-button" data-id=${doc.id}>
+          <button class="edit-tournament-button small-action-button" data-id="${doc.id}">
             <i class="bi bi-pencil"></i>
           </button>
         </td>  
@@ -183,7 +211,7 @@ async function showAllTournaments() {
       });
 
       tableBody.appendChild(tRow);
-    });
+    }
   } catch (error) {
     console.error("Couldn't get data from database: ", error);
   }
@@ -201,8 +229,8 @@ async function newTournament() {
 
     const newTournamentData = {
       createdAt: new Date(),
-      name,
       author: loggedUser.uid,
+      name,
     };
 
     const docRef = await addDoc(tournamentsRef, newTournamentData);
@@ -246,6 +274,12 @@ async function showTournament(id) {
 
 async function createTeam() {
   try {
+    const name = prompt("Enter team name:");
+    if (!name || name === "") {
+      alert("Please enter name");
+      return;
+    }
+
     // SQL: SELECT TABLE teams
     const teamsRef = collection(db, "teams");
 
@@ -253,6 +287,8 @@ async function createTeam() {
       players: [],
       bucksBank: 0,
       createdAt: new Date(),
+      author: loggedUser.uid,
+      name,
     };
 
     // SQL: INSERT INTO teams() VALUES ()
@@ -317,6 +353,13 @@ async function showTeams() {
           addPlayerToTeam(this.dataset.teamid);
         });
 
+      playersBox.insertAdjacentHTML(
+        "beforeend",
+        /*html*/ `
+          <span style="font-size: 1.4rem; font-weight: bold;">${teamData.name}</span>
+        `,
+      );
+
       teamData?.players.forEach((player) => {
         playersBox.insertAdjacentHTML(
           "beforeend",
@@ -341,6 +384,13 @@ async function addPlayerToTeam(teamId) {
   document.querySelector("#new-player-id").value = "";
   document.querySelector("#team-id").value = teamId;
 }
+
+document.querySelector("#cancel-new-player").addEventListener("click", () => {
+  document.querySelector("#new-player-name").value = "";
+  document.querySelector("#new-player-id").value = "";
+  document.querySelector("#team-id").value = null;
+  PANELS.addPlayerToTeam.classList.add("hidden");
+});
 
 const addPlayerToTeamForm = document.querySelector("#new-player-form");
 addPlayerToTeamForm.addEventListener("submit", async (e) => {
@@ -384,52 +434,47 @@ async function showBattles() {
   document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
   PANELS.battlesPanel.classList.remove("hidden");
 
-  let teams = [];
+  // map is faster than array when searching
+  const teamsMap = new Map();
 
   try {
-    // 1. get teams
-
     const teamsRef = collection(db, "teams");
-
     const querySnapshotTeams = await getDocs(teamsRef);
 
     querySnapshotTeams.forEach((doc) => {
-      const teamData = doc.data();
-      teams.push({ teamId: doc.id, teamData });
+      teamsMap.set(doc.id, doc.data());
     });
 
-    // 2. get battles
-
     const battlesRef = collection(db, "battles");
-
     const querySnapshotBattles = await getDocs(battlesRef);
 
     const battlesListDiv = PANELS.battlesPanel.querySelector("#battles-list");
     battlesListDiv.innerHTML = ``;
 
     querySnapshotBattles.forEach((doc) => {
+      const battleData = doc.data();
+
+      const battleTeams = battleData?.teams || [];
+
+      if (battleTeams.length === 0) return;
+
       const battleDiv = document.createElement("div");
       battleDiv.className = "battle-div";
 
-      const battleData = doc.data();
+      const teamStrings = battleTeams.map((teamId) => {
+        const teamData = teamsMap.get(teamId);
 
-      for (let i = 0; i < battleData?.teams.length; i++) {
-        const team = teams.find((t) => t.teamId === battleData.teams[i])
-          .teamData.players;
-        if (i > 0) {
-          battleDiv.insertAdjacentHTML("beforeend", "&nbsp;vs&nbsp;");
-        }
-        battleDiv.insertAdjacentHTML(
-          "beforeend",
-          getPlayersString(team || "error"),
-        );
-      }
+        return getPlayersString(teamData?.players || "error");
+      });
 
       battleDiv.insertAdjacentHTML(
         "beforeend",
-        /*html*/ `
-          <button class="small-action-button">${battleData?.closed ? "🔎" : "🖊"}</button>
-      `,
+        teamStrings.join("&nbsp;vs&nbsp;"),
+      );
+
+      battleDiv.insertAdjacentHTML(
+        "beforeend",
+        `<button class="small-action-button">${battleData?.closed ? "🔎" : "🖊"}</button>`,
       );
 
       battlesListDiv.appendChild(battleDiv);
@@ -452,7 +497,8 @@ function getPlayersString(playersArray) {
 document
   .querySelector("#add-battle-btn")
   .addEventListener("click", openAddBattlePanel);
-document.querySelector("#cancel-battle-btn").addEventListener("click", () => {
+document.querySelector("#cancel-battle-btn").addEventListener("click", (e) => {
+  e.preventDefault();
   PANELS.createBattle.classList.add("hidden");
 });
 
@@ -528,8 +574,10 @@ async function createBattle(teams) {
 
     const newBattleData = {
       teams,
-      createdAt: new Date(),
       closed: false,
+      createdAt: new Date(),
+      author: loggedUser.uid,
+      tournamentId: currentTournamentId,
     };
 
     const docRef = await addDoc(battlesRef, newBattleData);
