@@ -1,4 +1,4 @@
-// * FIREBASE * //
+//#region imports
 
 import {
   onAuthStateChanged,
@@ -12,11 +12,16 @@ import {
   collection, // table
   addDoc, // insert
   getDocs, // all docs
-  doc, // specific doc
+  doc, // specific doc (reference)
+  getDoc, // specific doc (data)
   updateDoc, // update
   arrayUnion,
   deleteDoc, // delete
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+
+//#endregion
+
+//#region login
 
 const emailInput = document.querySelector("#email-input");
 const passwordInput = document.querySelector("#password-input");
@@ -43,6 +48,8 @@ function handleLogIn() {
 
 loginBtn.addEventListener("click", handleLogIn);
 
+//#endregion
+
 /////
 
 const data = {
@@ -62,12 +69,15 @@ const data = {
   ],
 };
 
+//#region panels handlers
+
 const adminPanel = document.querySelector("#admin-panel");
 const PANELS = {
   loginPanel: document.querySelector("#login-panel"),
   adminPanel: document.querySelector("#admin-panel"),
   teamsPanel: document.querySelector("#teams-panel"),
   battlesPanel: document.querySelector("#battles-panel"),
+  tournamentPanel: document.querySelector("#tournament-panel"),
 
   addPlayerToTeam: document.querySelector("#new-player-form-container"),
   createBattle: document.querySelector("#new-battle-form-container"),
@@ -79,25 +89,41 @@ document.querySelectorAll(".back-to-admin-btn").forEach((b) =>
       .querySelectorAll(".panel")
       .forEach((p) => p.classList.add("hidden"));
 
-    PANELS.adminPanel.classList.remove("hidden");
+    PANELS.tournamentPanel.classList.remove("hidden");
   }),
 );
+
+let loggedUser = null;
 
 // login state change
 onAuthStateChanged(auth, (user) => {
   document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
 
   if (user) {
+    loggedUser = user;
+
     const userName = user.email.split("@")[0].toUpperCase();
     console.log("Logged user: ", { userName });
 
     errorMsg.innerText = "";
 
     PANELS.adminPanel.innerHTML = /*html*/ `
-      <p>Logged user: <strong>${userName}</strong></p>
-      <button id="logout-btn" class="action-button">Log out</button> <hr />
-      <button id="mng-teams-btn" class="action-button">Manage teams</button>
-      <button id="mng-battles-btn" class="action-button">Manage battles</button>
+      <div><p style="display: inline-block;">Logged user: <strong>${userName}</strong></p>
+      <button id="logout-btn" class="action-button"><i class="bi bi-door-open"></i> Log out</button></div> <hr />
+      <p>Your tournaments</p>
+        <table id="tournaments-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Creation date</th>
+              <th>Battles amount</th>
+              <th>Actions <button id="new-tournament-btn" class="small-action-button"><i class="bi bi-plus-circle"></i> new</button></th>
+            </tr>
+          </thead>
+          <tbody>
+
+          </tbody>
+        </table>
     `;
     document.querySelector("#logout-btn").addEventListener("click", () => {
       signOut(auth);
@@ -108,12 +134,115 @@ onAuthStateChanged(auth, (user) => {
     document
       .querySelector("#mng-battles-btn")
       .addEventListener("click", showBattles);
+    document
+      .querySelector("#new-tournament-btn")
+      .addEventListener("click", newTournament);
+
+    showAllTournaments();
 
     PANELS.adminPanel.classList.remove("hidden");
   } else {
     PANELS.loginPanel.classList.remove("hidden");
+    loggedUser = null;
   }
 });
+
+//#endregion
+
+//#region tournaments
+
+async function showAllTournaments() {
+  try {
+    const tournamentsRef = collection(db, "tournaments");
+
+    const querySnapshot = await getDocs(tournamentsRef);
+
+    const tournamentsTable = document.querySelector("#tournaments-table");
+    if (!tournamentsTable) {
+      console.error("Tournaments table not found");
+      return;
+    }
+    const tableBody = tournamentsTable.querySelector("tbody");
+
+    querySnapshot.forEach((doc) => {
+      const tournamentData = doc.data();
+
+      const tRow = document.createElement("tr");
+      tRow.innerHTML = /*html*/ `
+        <td>${{ tournamentData }}</td>
+        <td>
+          <button class="edit-tournament-button small-action-button" data-id=${doc.id}>
+            <i class="bi bi-pencil"></i>
+          </button>
+        </td>  
+      `;
+
+      const editBtn = tRow.querySelector(".edit-tournament-button");
+      editBtn.addEventListener("click", function () {
+        showTournament(this.dataset.id);
+      });
+
+      tableBody.appendChild(tRow);
+    });
+  } catch (error) {
+    console.error("Couldn't get data from database: ", error);
+  }
+}
+
+async function newTournament() {
+  const name = prompt("Enter tournament name:");
+  if (!name || name === "") {
+    alert("Name cannot be empty");
+    return;
+  }
+
+  try {
+    const tournamentsRef = collection(db, "tournaments");
+
+    const newTournamentData = {
+      createdAt: new Date(),
+      name,
+      author: loggedUser.uid,
+    };
+
+    const docRef = await addDoc(tournamentsRef, newTournamentData);
+
+    showTournament(docRef.id);
+  } catch (error) {
+    console.error("Couldn't insert data to database: ", error);
+  }
+}
+
+let currentTournamentId;
+
+async function showTournament(id) {
+  currentTournamentId = id;
+  document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
+  PANELS.tournamentPanel.classList.remove("hidden");
+
+  try {
+    const tournamentsRef = collection(db, "tournaments");
+
+    // get doc data by id
+    const docSnapshot = await getDoc(doc(db, "tournaments", id));
+
+    if (docSnapshot.exists()) {
+      console.log("Doc data:", docSnapshot.data());
+      const docData = docSnapshot.data();
+
+      PANELS.tournamentPanel.querySelector("#tournament-name").innerHTML =
+        `${docData.name}`;
+    } else {
+      alert("Doc not found!");
+    }
+  } catch (error) {
+    console.error("Couldn't fetch data: ", error);
+  }
+}
+
+//#endregion
+
+//#region teams
 
 async function createTeam() {
   try {
@@ -205,151 +334,6 @@ async function showTeams() {
   }
 }
 
-async function showBattles() {
-  document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
-  PANELS.battlesPanel.classList.remove("hidden");
-
-  let teams = [];
-
-  try {
-    // 1. get teams
-
-    const teamsRef = collection(db, "teams");
-
-    const querySnapshotTeams = await getDocs(teamsRef);
-
-    querySnapshotTeams.forEach((doc) => {
-      const teamData = doc.data();
-      teams.push({ teamId: doc.id, teamData });
-    });
-
-    // 2. get battles
-
-    const battlesRef = collection(db, "battles");
-
-    const querySnapshotBattles = await getDocs(battlesRef);
-
-    const battlesListDiv = PANELS.battlesPanel.querySelector("#battles-list");
-    battlesListDiv.innerHTML = ``;
-
-    querySnapshotBattles.forEach((doc) => {
-      const battleDiv = document.createElement("div");
-      battleDiv.className = "battle-div";
-
-      const battleData = doc.data();
-
-      battleDiv.innerHTML = /*html*/ `
-        ${getPlayersString(teams.find((t) => t.teamId === battleData.team1).teamData.players) || "error"}
-          &nbsp;vs&nbsp; 
-        ${getPlayersString(teams.find((t) => t.teamId === battleData.team2).teamData.players) || "error"}
-      `;
-
-      battlesListDiv.appendChild(battleDiv);
-    });
-  } catch (error) {
-    console.error("Couldn't get data from database: ", error);
-  }
-}
-
-function getPlayersString(playersArray) {
-  let string = `<p class="players-box">`;
-  playersArray.forEach((p) => {
-    string += `<span title="${p.inGameId || "no in-game id"}">${p.name || "player"}</span>`;
-  });
-  string += `</p>`;
-
-  return string;
-}
-
-document
-  .querySelector("#add-battle-btn")
-  .addEventListener("click", openAddBattlePanel);
-document.querySelector("#cancel-battle-btn").addEventListener("click", () => {
-  PANELS.createBattle.classList.add("hidden");
-});
-
-let selectedTeams = [];
-
-const beginBattleButton = document.querySelector("#begin-battle-btn");
-beginBattleButton.addEventListener("click", () => {
-  if (selectedTeams.length !== 2) return;
-
-  createBattle(selectedTeams[0], selectedTeams[1]);
-  PANELS.createBattle.classList.add("hidden");
-  showBattles();
-});
-
-async function openAddBattlePanel() {
-  PANELS.createBattle.classList.remove("hidden");
-
-  const teamSelectGrid = document.querySelector("#team-select-grid");
-  teamSelectGrid.innerHTML = ``;
-
-  beginBattleButton.disabled = true;
-
-  const teamsRef = collection(db, "teams");
-  try {
-    const querySnapshot = await getDocs(teamsRef);
-
-    querySnapshot.forEach((doc) => {
-      const teamData = doc.data();
-
-      const teamDiv = document.createElement("div");
-      teamDiv.innerHTML = /*html*/ `
-          <input type="checkbox" class="select-team-checkbox small-action-button" data-teamid="${doc.id}" />
-          <p class="players-box"></p>
-        `;
-
-      teamDiv
-        .querySelector(".select-team-checkbox")
-        .addEventListener("change", function (e) {
-          if (e.target.checked) {
-            if (selectedTeams.find((teamId) => teamId === this.dataset.teamid))
-              return;
-            selectedTeams.push(this.dataset.teamid);
-          } else {
-            selectedTeams = selectedTeams.filter(
-              (teamId) => teamId !== this.dataset.teamid,
-            );
-          }
-
-          beginBattleButton.disabled = selectedTeams.length !== 2;
-        });
-
-      const playersBox = teamDiv.querySelector(".players-box");
-
-      teamData?.players.forEach((player) => {
-        playersBox.insertAdjacentHTML(
-          "beforeend",
-          /*html*/ `
-              <span title="${player.inGameId || "no in-game id"}">${player.name || "player"}</span>
-            `,
-        );
-      });
-
-      teamSelectGrid.appendChild(teamDiv);
-    });
-  } catch (error) {
-    console.error("Couldn't get teams: ", error);
-  }
-}
-
-async function createBattle(team1Id, team2Id) {
-  try {
-    const battlesRef = collection(db, "battles");
-
-    const newBattleData = {
-      team1: team1Id,
-      team2: team2Id,
-      createdAt: new Date(),
-    };
-
-    const docRef = await addDoc(battlesRef, newBattleData);
-  } catch (error) {
-    console.error("Couldn't insert data to database: ", error);
-  }
-}
-
 async function addPlayerToTeam(teamId) {
   PANELS.addPlayerToTeam.classList.remove("hidden");
 
@@ -391,3 +375,167 @@ addPlayerToTeamForm.addEventListener("submit", async (e) => {
     console.error("Couldn't add player to team: ", error);
   }
 });
+
+//#endregion
+
+//#region battles
+
+async function showBattles() {
+  document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
+  PANELS.battlesPanel.classList.remove("hidden");
+
+  let teams = [];
+
+  try {
+    // 1. get teams
+
+    const teamsRef = collection(db, "teams");
+
+    const querySnapshotTeams = await getDocs(teamsRef);
+
+    querySnapshotTeams.forEach((doc) => {
+      const teamData = doc.data();
+      teams.push({ teamId: doc.id, teamData });
+    });
+
+    // 2. get battles
+
+    const battlesRef = collection(db, "battles");
+
+    const querySnapshotBattles = await getDocs(battlesRef);
+
+    const battlesListDiv = PANELS.battlesPanel.querySelector("#battles-list");
+    battlesListDiv.innerHTML = ``;
+
+    querySnapshotBattles.forEach((doc) => {
+      const battleDiv = document.createElement("div");
+      battleDiv.className = "battle-div";
+
+      const battleData = doc.data();
+
+      for (let i = 0; i < battleData?.teams.length; i++) {
+        const team = teams.find((t) => t.teamId === battleData.teams[i])
+          .teamData.players;
+        if (i > 0) {
+          battleDiv.insertAdjacentHTML("beforeend", "&nbsp;vs&nbsp;");
+        }
+        battleDiv.insertAdjacentHTML(
+          "beforeend",
+          getPlayersString(team || "error"),
+        );
+      }
+
+      battleDiv.insertAdjacentHTML(
+        "beforeend",
+        /*html*/ `
+          <button class="small-action-button">${battleData?.closed ? "🔎" : "🖊"}</button>
+      `,
+      );
+
+      battlesListDiv.appendChild(battleDiv);
+    });
+  } catch (error) {
+    console.error("Couldn't get data from database: ", error);
+  }
+}
+
+function getPlayersString(playersArray) {
+  let string = `<p class="players-box">`;
+  playersArray.forEach((p) => {
+    string += `<span title="${p.inGameId || "no in-game id"}">${p.name || "player"}</span>`;
+  });
+  string += `</p>`;
+
+  return string;
+}
+
+document
+  .querySelector("#add-battle-btn")
+  .addEventListener("click", openAddBattlePanel);
+document.querySelector("#cancel-battle-btn").addEventListener("click", () => {
+  PANELS.createBattle.classList.add("hidden");
+});
+
+let selectedTeams = [];
+
+const beginBattleButton = document.querySelector("#begin-battle-btn");
+beginBattleButton.addEventListener("click", () => {
+  if (selectedTeams.length < 2) return;
+
+  createBattle(selectedTeams);
+  PANELS.createBattle.classList.add("hidden");
+  showBattles();
+});
+
+async function openAddBattlePanel() {
+  PANELS.createBattle.classList.remove("hidden");
+
+  const teamSelectGrid = document.querySelector("#team-select-grid");
+  teamSelectGrid.innerHTML = ``;
+
+  beginBattleButton.disabled = true;
+
+  const teamsRef = collection(db, "teams");
+  try {
+    const querySnapshot = await getDocs(teamsRef);
+
+    querySnapshot.forEach((doc) => {
+      const teamData = doc.data();
+
+      const teamDiv = document.createElement("div");
+      teamDiv.innerHTML = /*html*/ `
+          <input type="checkbox" class="select-team-checkbox small-action-button" data-teamid="${doc.id}" />
+          <p class="players-box"></p>
+        `;
+
+      teamDiv
+        .querySelector(".select-team-checkbox")
+        .addEventListener("change", function (e) {
+          if (e.target.checked) {
+            if (selectedTeams.find((teamId) => teamId === this.dataset.teamid))
+              return;
+            selectedTeams.push(this.dataset.teamid);
+          } else {
+            selectedTeams = selectedTeams.filter(
+              (teamId) => teamId !== this.dataset.teamid,
+            );
+          }
+
+          beginBattleButton.disabled = selectedTeams.length < 2;
+        });
+
+      const playersBox = teamDiv.querySelector(".players-box");
+
+      teamData?.players.forEach((player) => {
+        playersBox.insertAdjacentHTML(
+          "beforeend",
+          /*html*/ `
+              <span title="${player.inGameId || "no in-game id"}">${player.name || "player"}</span>
+            `,
+        );
+      });
+
+      teamSelectGrid.appendChild(teamDiv);
+    });
+  } catch (error) {
+    console.error("Couldn't get teams: ", error);
+  }
+}
+
+async function createBattle(teams) {
+  try {
+    const battlesRef = collection(db, "battles");
+
+    const newBattleData = {
+      teams,
+      createdAt: new Date(),
+      closed: false,
+    };
+
+    const docRef = await addDoc(battlesRef, newBattleData);
+  } catch (error) {
+    console.error("Couldn't insert data to database: ", error);
+  }
+}
+
+//#endregion
