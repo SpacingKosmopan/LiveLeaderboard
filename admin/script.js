@@ -478,6 +478,58 @@ async function showBattles() {
       );
 
       battlesListDiv.appendChild(battleDiv);
+
+      battlesListDiv.insertAdjacentHTML(
+        "beforeend",
+        /*html*/ `
+          <table>
+            <thead>
+              <tr>
+                <td colspan="2" rowspan="2">Team info</td>
+                <td colspan="8">Battles</td>
+              </tr>
+
+              <tr>
+                <td>1</td>
+                <td>2</td>
+                <td>3</td>
+                <td>4</td>
+                <td>5</td>
+                <td>6</td>
+                <td>7</td>
+                <td>8</td>
+              </tr>
+            </thead>
+        
+            <tbody>
+              <tr>
+                <td rowspan="4">Team A</td>
+                <td>Placement</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+              </tr>
+
+              <tr>
+                <td>Kills</td>
+              </tr>
+
+              <tr>
+                <td>Survivors</td>
+              </tr>
+
+              <tr>
+                <td>Penalty</td>
+              </tr>
+            </tbody>
+          </table>
+      `,
+      );
     });
   } catch (error) {
     console.error("Couldn't get data from database: ", error);

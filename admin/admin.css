@@ -180,3 +180,7 @@ td {
 #tournaments-table td {
   text-align: center;
 }
+
+th {
+  border: 1px solid;
+}
