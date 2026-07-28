@@ -482,7 +482,8 @@ async function showBattles() {
       battlesListDiv.insertAdjacentHTML(
         "beforeend",
         /*html*/ `
-          <table>
+        <div class="battle-container">
+          <table class="battle-table">
             <thead>
               <tr>
                 <td colspan="2" rowspan="2">Team info</td>
@@ -528,6 +529,7 @@ async function showBattles() {
               </tr>
             </tbody>
           </table>
+        </div>
       `,
       );
     });
