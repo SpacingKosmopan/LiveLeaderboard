@@ -82,6 +82,7 @@ const PANELS = {
   teamsPanel: document.querySelector("#teams-panel"),
   battlesPanel: document.querySelector("#battles-panel"),
   tournamentPanel: document.querySelector("#tournament-panel"),
+  battleGamePanel: document.querySelector("#battle-game-panel"),
 
   addPlayerToTeam: document.querySelector("#new-player-form-container"),
   createBattle: document.querySelector("#new-battle-form-container"),
@@ -430,10 +431,7 @@ addPlayerToTeamForm.addEventListener("submit", async (e) => {
 
 //#region battles
 
-async function showBattles() {
-  document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
-  PANELS.battlesPanel.classList.remove("hidden");
-
+async function getTeamsMap() {
   // map is faster than array when searching
   const teamsMap = new Map();
 
@@ -444,6 +442,19 @@ async function showBattles() {
     querySnapshotTeams.forEach((doc) => {
       teamsMap.set(doc.id, doc.data());
     });
+
+    return teamsMap;
+  } catch (error) {
+    console.error("Couldn't get data from database: ", error);
+  }
+}
+
+async function showBattles() {
+  document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
+  PANELS.battlesPanel.classList.remove("hidden");
+
+  try {
+    const teamsMap = await getTeamsMap();
 
     const battlesRef = collection(db, "battles");
     const querySnapshotBattles = await getDocs(battlesRef);
@@ -474,64 +485,22 @@ async function showBattles() {
 
       battleDiv.insertAdjacentHTML(
         "beforeend",
-        `<button class="small-action-button">${battleData?.closed ? "🔎" : "🖊"}</button>`,
+        `<button class="small-action-button go-to-battle-btn">${battleData?.closed ? "🔎" : `<i class="bi bi-pencil"></i>`}</button>`,
       );
+
+      battleDiv
+        .querySelector(".go-to-battle-btn")
+        ?.addEventListener("click", () => {
+          document
+            .querySelectorAll(".panel")
+            .forEach((p) => p.classList.add("hidden"));
+
+          addTeamsToRecordTable();
+
+          PANELS.battleGamePanel.classList.remove("hidden");
+        });
 
       battlesListDiv.appendChild(battleDiv);
-
-      battlesListDiv.insertAdjacentHTML(
-        "beforeend",
-        /*html*/ `
-        <div class="battle-container">
-          <table class="battle-table">
-            <thead>
-              <tr>
-                <td colspan="2" rowspan="2">Team info</td>
-                <td colspan="8">Battles</td>
-              </tr>
-
-              <tr>
-                <td>1</td>
-                <td>2</td>
-                <td>3</td>
-                <td>4</td>
-                <td>5</td>
-                <td>6</td>
-                <td>7</td>
-                <td>8</td>
-              </tr>
-            </thead>
-        
-            <tbody>
-              <tr>
-                <td rowspan="4">Team A</td>
-                <td>Placement</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-
-              <tr>
-                <td>Kills</td>
-              </tr>
-
-              <tr>
-                <td>Survivors</td>
-              </tr>
-
-              <tr>
-                <td>Penalty</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      `,
-      );
     });
   } catch (error) {
     console.error("Couldn't get data from database: ", error);
@@ -638,6 +607,231 @@ async function createBattle(teams) {
   } catch (error) {
     console.error("Couldn't insert data to database: ", error);
   }
+}
+
+//#endregion
+
+//#region records
+
+let teamsBattleTable = {};
+let battleData = [];
+
+async function addTeamsToRecordTable() {
+  const battleRecordsTable = document.querySelector("#battle-records-table");
+  if (!battleRecordsTable) {
+    console.error("Battle records table not found");
+    return;
+  }
+
+  battleRecordsTable.innerHTML = /*html*/ `
+    <thead>
+      <tr>
+        <td colspan="2" rowspan="2">Team info</td>
+        <!-- dynamic colspan change -->
+        <td colspan="1" id="battles-header">Battles 
+          <button id="new-battle-record-btn" class="small-action-button"><i class="bi bi-plus-circle"></i> new</button>
+        </td>
+      </tr>
+
+      <tr id="record-number-row">
+        <!-- dynamic cells inserting -->
+      </tr>
+    </thead>
+
+    <tbody>
+    </tbody>
+  `;
+
+  const teams = await getTeamsMap();
+
+  battleRecordsTable
+    .querySelector("#new-battle-record-btn")
+    .addEventListener("click", () => {
+      addBattleRecord(teams);
+    });
+
+  teams.forEach((team, key) => {
+    teamsBattleTable[key] = {};
+
+    const placementRow = document.createElement("tr");
+    placementRow.id = `team-${key}-placement`;
+    placementRow.innerHTML = /*html*/ `
+      <td rowspan="4">Team ${team.name}
+        ${getPlayersString(team.players)}
+      </td>
+      <td>Placement (1-12)</td>
+    `;
+    battleRecordsTable.querySelector("tbody").appendChild(placementRow);
+    teamsBattleTable[key].placementRow = placementRow;
+
+    const killsRow = document.createElement("tr");
+    killsRow.id = `team-${key}-kills`;
+    killsRow.innerHTML = /*html*/ `<td>Kills (0-12)</td>`;
+    battleRecordsTable.querySelector("tbody").appendChild(killsRow);
+    teamsBattleTable[key].killsRow = killsRow;
+
+    const survivorsRow = document.createElement("tr");
+    survivorsRow.id = `team-${key}-survivors`;
+    survivorsRow.innerHTML = /*html*/ `<td>Survivors (0-5)</td>`;
+    battleRecordsTable.querySelector("tbody").appendChild(survivorsRow);
+    teamsBattleTable[key].survivorsRow = survivorsRow;
+
+    const penaltyRow = document.createElement("tr");
+    penaltyRow.id = `team-${key}-penalty`;
+    penaltyRow.innerHTML = /*html*/ `<td>Penalty (>=0)</td>`;
+    battleRecordsTable.querySelector("tbody").appendChild(penaltyRow);
+    teamsBattleTable[key].penaltyRow = penaltyRow;
+  });
+}
+
+function showBattleRecordInputs() {
+  const battleRecordsTable = document.querySelector("#battle-records-table");
+  if (!battleRecordsTable) {
+    console.error("Battle records table not found");
+    return;
+  }
+}
+
+window.handleInput = function (input) {
+  const category = input.dataset?.category;
+
+  if (
+    category !== "survivors" &&
+    category !== "penalty" &&
+    category !== "kills" &&
+    category !== "placement"
+  )
+    return;
+
+  const value = input.value;
+  const parsedValue = parseInt(value, 10); // 10 - decimal system
+
+  if (
+    value !== "" &&
+    (isNaN(parsedValue) || !Number.isInteger(Number(value)))
+  ) {
+    input.value = "";
+    alert("Incorrect value");
+    return;
+  }
+
+  const parentTD = input.parentElement;
+
+  const teamId = parentTD.dataset.teamid;
+  const recordId = parseInt(parentTD.dataset.recordid, 10);
+
+  battleData[recordId - 1][teamId][category] = parsedValue;
+  console.log({ battleData });
+};
+
+async function addBattleRecord() {
+  if (Object.keys(teamsBattleTable).length === 0) {
+    console.error("Could not add record to battle table");
+    return;
+  }
+
+  const battleRecordsTable = document.querySelector("#battle-records-table");
+  if (!battleRecordsTable) {
+    console.error("Battle records table not found");
+    return;
+  }
+
+  const teams = await getTeamsMap();
+
+  const battlesAmount = battleData.length;
+
+  battleData.push({});
+
+  battleRecordsTable
+    .querySelector("#record-number-row")
+    //TODO save button
+    .insertAdjacentHTML(
+      "beforeend",
+      /*html*/ `<td>${battlesAmount + 1} <button class="small-action-button" style="color: orange">save TODO</button></td>`,
+    );
+
+  battleRecordsTable.querySelector("thead tr td#battles-header").colSpan =
+    battlesAmount + 1;
+
+  teams.forEach((team, key) => {
+    const teamTableRow = teamsBattleTable[key];
+    if (!teamTableRow) {
+      console.error("Team row not found");
+      return;
+    }
+
+    teamTableRow.placementRow.insertAdjacentHTML(
+      "beforeend",
+      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount + 1}>
+        <input 
+          type="number"
+          data-category="placement"
+          class="battle-table-record-input"
+          oninput="handleInput(this)"
+          
+          min="1"
+          max="12"
+          step="1"
+          >
+      </td>`,
+    );
+
+    teamTableRow.killsRow.insertAdjacentHTML(
+      "beforeend",
+      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount + 1}>
+        <input 
+          type="number"
+          data-category="kills"
+          class="battle-table-record-input"
+          oninput="handleInput(this)"
+          
+          min="0"
+          max="12"
+          step="1"
+          >
+      </td>`,
+    );
+
+    teamTableRow.survivorsRow.insertAdjacentHTML(
+      "beforeend",
+      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount + 1}>
+        <input 
+          type="number"
+          data-category="survivors"
+          class="battle-table-record-input"
+          oninput="handleInput(this)"
+          
+          min="0"
+          max="5"
+          step="1"
+          >
+      </td>`,
+    );
+
+    teamTableRow.penaltyRow.insertAdjacentHTML(
+      "beforeend",
+      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount + 1}>
+        <input 
+          type="number"
+          data-category="penalty"
+          class="battle-table-record-input"
+          oninput="handleInput(this)"
+          
+          min="0"
+          step="1"
+          >
+      </td>`,
+    );
+
+    battleData[battleData.length - 1][key] = {
+      placement: null,
+      kills: null,
+      survivors: null,
+      penalty: null,
+    };
+
+    console.log({ battleData });
+  });
 }
 
 //#endregion

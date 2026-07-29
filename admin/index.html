@@ -98,7 +98,7 @@
           </li>
           <li class="menu-element">
             <a class="back-to-admin-btn"
-              ><i class="bi bi-trophy"></i> Go back</a
+              ><i class="bi bi-arrow-left"></i> Go back</a
             >
           </li>
         </ul>
@@ -110,7 +110,9 @@
           <button id="add-team-btn" class="action-button">
             Create empty team
           </button>
-          <button class="back-to-tournament-btn action-button">Go back</button>
+          <button class="back-to-tournament-btn action-button">
+            <i class="bi bi-arrow-left"></i> Go back
+          </button>
         </div>
         <div id="teams-list" class="list-div"></div>
       </div>
@@ -121,12 +123,22 @@
           <button class="action-button" id="add-battle-btn">
             Create battle
           </button>
-          <button class="back-to-tournament-btn action-button">Go back</button>
+          <button class="back-to-tournament-btn action-button">
+            <i class="bi bi-arrow-left"></i> Go back
+          </button>
         </div>
         <div id="battles-list" class="list-div"></div>
       </div>
 
-      <!---->
+      <div id="battle-game-panel" class="hidden panel">
+        <button class="back-to-tournament-btn action-button">
+          <i class="bi bi-arrow-left"></i> Go back
+        </button>
+
+        <div class="battle-table-container">
+          <table id="battle-records-table" class="battle-table"></table>
+        </div>
+      </div>
     </div>
 
     <script type="module" src="./script.js"></script>
