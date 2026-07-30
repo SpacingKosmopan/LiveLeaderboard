@@ -21,6 +21,7 @@ import {
   where,
   count,
   getCountFromServer,
+  onSnapshot,
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 //#endregion
@@ -305,7 +306,7 @@ async function deleteTeam(teamId) {
   const docRef = doc(db, "teams", teamId);
 
   try {
-    deleteDoc(docRef);
+    await deleteDoc(docRef);
 
     await showTeams();
   } catch (error) {
@@ -457,51 +458,59 @@ async function showBattles() {
     const teamsMap = await getTeamsMap();
 
     const battlesRef = collection(db, "battles");
-    const querySnapshotBattles = await getDocs(battlesRef);
-
     const battlesListDiv = PANELS.battlesPanel.querySelector("#battles-list");
-    battlesListDiv.innerHTML = ``;
 
-    querySnapshotBattles.forEach((doc) => {
-      const battleData = doc.data();
+    // Zamiast getDocs tworzymy subskrypcję czasu rzeczywistego
+    const unsubscribe = onSnapshot(
+      battlesRef,
+      (querySnapshotBattles) => {
+        battlesListDiv.innerHTML = ``;
 
-      const battleTeams = battleData?.teams || [];
+        querySnapshotBattles.forEach((doc) => {
+          const battleData = doc.data();
+          const battleTeams = battleData?.teams || [];
 
-      if (battleTeams.length === 0) return;
+          if (battleTeams.length === 0) return;
 
-      const battleDiv = document.createElement("div");
-      battleDiv.className = "battle-div";
+          const battleDiv = document.createElement("div");
+          battleDiv.className = "battle-div";
 
-      const teamStrings = battleTeams.map((teamId) => {
-        const teamData = teamsMap.get(teamId);
+          const teamStrings = battleTeams.map((teamId) => {
+            const teamData = teamsMap.get(teamId);
+            return getPlayersString(teamData?.players || "error");
+          });
 
-        return getPlayersString(teamData?.players || "error");
-      });
+          battleDiv.insertAdjacentHTML(
+            "beforeend",
+            teamStrings.join("&nbsp;vs&nbsp;"),
+          );
 
-      battleDiv.insertAdjacentHTML(
-        "beforeend",
-        teamStrings.join("&nbsp;vs&nbsp;"),
-      );
+          battleDiv.insertAdjacentHTML(
+            "beforeend",
+            `<button class="small-action-button go-to-battle-btn">${battleData?.closed ? "🔎" : `<i class="bi bi-pencil"></i>`}</button>`,
+          );
 
-      battleDiv.insertAdjacentHTML(
-        "beforeend",
-        `<button class="small-action-button go-to-battle-btn">${battleData?.closed ? "🔎" : `<i class="bi bi-pencil"></i>`}</button>`,
-      );
+          battleDiv
+            .querySelector(".go-to-battle-btn")
+            ?.addEventListener("click", () => {
+              document
+                .querySelectorAll(".panel")
+                .forEach((p) => p.classList.add("hidden"));
 
-      battleDiv
-        .querySelector(".go-to-battle-btn")
-        ?.addEventListener("click", () => {
-          document
-            .querySelectorAll(".panel")
-            .forEach((p) => p.classList.add("hidden"));
+              addTeamsToRecordTable();
+              PANELS.battleGamePanel.classList.remove("hidden");
+            });
 
-          addTeamsToRecordTable();
-
-          PANELS.battleGamePanel.classList.remove("hidden");
+          battlesListDiv.appendChild(battleDiv);
         });
+      },
+      (error) => {
+        console.error("Błąd nasłuchiwania bitew: ", error);
+      },
+    );
 
-      battlesListDiv.appendChild(battleDiv);
-    });
+    // Możesz zwrócić unsubscribe, aby zamknąć połączenie po opuszczeniu tego panelu
+    // return unsubscribe;
   } catch (error) {
     console.error("Couldn't get data from database: ", error);
   }
