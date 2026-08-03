@@ -23,7 +23,6 @@
             type="text"
             name="new-player-name"
             id="new-player-name"
-            required
             placeholder="Player name..."
           />
           <input
@@ -40,7 +39,9 @@
           >
             Add player
           </button>
-          <button id="cancel-new-player" class="action-button">Cancel</button>
+          <button type="button" id="cancel-new-player" class="action-button">
+            Cancel
+          </button>
         </form>
       </div>
     </div>
@@ -84,13 +85,34 @@
         hidden admin panel (you should not be able to see this)
       </div>
 
+      <div id="tournament-panel" class="hidden panel">
+        <h1 id="tournament-name"></h1>
+        <ul class="menu-list">
+          <li class="menu-element">
+            <a id="mng-teams-btn"><i class="bi bi-people"></i> Manage teams</a>
+          </li>
+          <li class="menu-element">
+            <a id="mng-battles-btn"
+              ><i class="bi bi-trophy"></i> Manage battles</a
+            >
+          </li>
+          <li class="menu-element">
+            <a class="back-to-admin-btn"
+              ><i class="bi bi-arrow-left"></i> Go back</a
+            >
+          </li>
+        </ul>
+      </div>
+
       <div id="teams-panel" class="hidden panel">
         <h1>Teams</h1>
         <div class="buttons-container">
           <button id="add-team-btn" class="action-button">
             Create empty team
           </button>
-          <button class="back-to-admin-btn action-button">Go back</button>
+          <button class="back-to-tournament-btn action-button">
+            <i class="bi bi-arrow-left"></i> Go back
+          </button>
         </div>
         <div id="teams-list" class="list-div"></div>
       </div>
@@ -101,12 +123,22 @@
           <button class="action-button" id="add-battle-btn">
             Create battle
           </button>
-          <button class="back-to-admin-btn action-button">Go back</button>
+          <button class="back-to-tournament-btn action-button">
+            <i class="bi bi-arrow-left"></i> Go back
+          </button>
         </div>
         <div id="battles-list" class="list-div"></div>
       </div>
 
-      <!---->
+      <div id="battle-game-panel" class="hidden panel">
+        <button class="back-to-tournament-btn action-button">
+          <i class="bi bi-arrow-left"></i> Go back
+        </button>
+
+        <div class="battle-table-container">
+          <table id="battle-records-table" class="battle-table"></table>
+        </div>
+      </div>
     </div>
 
     <script type="module" src="./script.js"></script>
