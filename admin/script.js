@@ -15,6 +15,7 @@ import {
   doc, // specific doc (reference)
   getDoc, // specific doc (data)
   updateDoc, // update
+  setDoc,
   arrayUnion,
   deleteDoc, // delete
   query,
@@ -22,6 +23,7 @@ import {
   count,
   getCountFromServer,
   onSnapshot,
+  orderBy,
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 //#endregion
@@ -133,8 +135,10 @@ onAuthStateChanged(auth, (user) => {
           <thead>
             <tr>
               <th>Name</th>
+              <th>Author</th>
               <th>Creation date</th>
               <th>Battles amount</th>
+              <th>Status</th>
               <th>Actions <button id="new-tournament-btn" class="small-action-button"><i class="bi bi-plus-circle"></i> new</button></th>
             </tr>
           </thead>
@@ -169,51 +173,77 @@ onAuthStateChanged(auth, (user) => {
 
 //#region tournaments
 
-async function showAllTournaments() {
-  try {
-    const tournamentsRef = collection(db, "tournaments");
-    const querySnapshot = await getDocs(tournamentsRef);
+let tournamentsUnsubscribe = null;
 
+async function showAllTournaments() {
+  if (typeof tournamentsUnsubscribe === "function") {
+    tournamentsUnsubscribe();
+    tournamentsUnsubscribe = null;
+  }
+
+  try {
     const tournamentsTable = document.querySelector("#tournaments-table");
     if (!tournamentsTable) {
       console.error("Tournaments table not found");
       return;
     }
     const tableBody = tournamentsTable.querySelector("tbody");
-    tableBody.innerHTML = "";
 
-    // for...of can do await
-    for (const doc of querySnapshot.docs) {
-      const tournamentData = doc.data();
+    const tournamentsRef = collection(db, "tournaments");
+    const tournamentQuery = query(tournamentsRef, orderBy("createdAt", "desc"));
 
-      const battlesRef = collection(db, "battles");
-      const battlesQuery = query(
-        battlesRef,
-        where("tournamentId", "==", doc.id),
-      );
+    tournamentsUnsubscribe = onSnapshot(
+      tournamentQuery,
+      async (querySnapshot) => {
+        tableBody.innerHTML = "";
 
-      const countSnapshot = await getCountFromServer(battlesQuery);
-      const battlesCount = countSnapshot.data().count;
+        // for ... of allows await
+        for (const doc of querySnapshot.docs) {
+          const tournamentData = doc.data();
 
-      const tRow = document.createElement("tr");
-      tRow.innerHTML = /*html*/ `
-        <td>${tournamentData.name}</td>
-        <td>${tournamentData.createdAt.toDate().toLocaleString("en-EN")}</td>
-        <td>${battlesCount}</td> 
-        <td>
-          <button class="edit-tournament-button small-action-button" data-id="${doc.id}">
-            <i class="bi bi-pencil"></i>
-          </button>
-        </td>  
-      `;
+          const battlesRef = collection(db, "battles");
+          const battlesQuery = query(
+            battlesRef,
+            where("tournamentId", "==", doc.id),
+          );
 
-      const editBtn = tRow.querySelector(".edit-tournament-button");
-      editBtn.addEventListener("click", function () {
-        showTournament(this.dataset.id);
-      });
+          const countSnapshot = await getCountFromServer(battlesQuery);
+          const battlesCount = countSnapshot.data().count;
 
-      tableBody.appendChild(tRow);
-    }
+          const tRow = document.createElement("tr");
+          tRow.innerHTML = /*html*/ `
+            <td>${tournamentData.name || "No name"}</td>
+            <td>${tournamentData.authorUsername || "missing name"}</td>
+            <td>${tournamentData.createdAt?.toDate()?.toLocaleString("en-GB") || ""}</td>
+            <td>${battlesCount}</td> 
+            <td>${tournamentData.active ? `<i class="bi bi-check-circle-fill"></i> active` : `<i class="bi bi-x-circle-fill"></i> inactive`}</td>
+            <td>
+              ${
+                tournamentData.author === loggedUser.uid
+                  ? `owner <button class="edit-tournament-button small-action-button" data-id="${doc.id}">
+                <i class="bi bi-pencil"></i>
+              </button>`
+                  : ""
+              }
+            </td>  
+          `;
+
+          const editBtn = tRow.querySelector(".edit-tournament-button");
+          editBtn?.addEventListener("click", function () {
+            if (typeof tournamentsUnsubscribe === "function") {
+              tournamentsUnsubscribe();
+              tournamentsUnsubscribe = null;
+            }
+            showTournament(this.dataset.id);
+          });
+
+          tableBody.appendChild(tRow);
+        }
+      },
+      (error) => {
+        console.error("Błąd nasłuchiwania turniejów: ", error);
+      },
+    );
   } catch (error) {
     console.error("Couldn't get data from database: ", error);
   }
@@ -229,10 +259,14 @@ async function newTournament() {
   try {
     const tournamentsRef = collection(db, "tournaments");
 
+    const userName = loggedUser.email.split("@")[0].toUpperCase();
+
     const newTournamentData = {
+      name,
       createdAt: new Date(),
       author: loggedUser.uid,
-      name,
+      authorUsername: userName,
+      active: false,
     };
 
     const docRef = await addDoc(tournamentsRef, newTournamentData);
@@ -257,11 +291,12 @@ async function showTournament(id) {
     const docSnapshot = await getDoc(doc(db, "tournaments", id));
 
     if (docSnapshot.exists()) {
-      console.log("Doc data:", docSnapshot.data());
       const docData = docSnapshot.data();
 
       PANELS.tournamentPanel.querySelector("#tournament-name").innerHTML =
         `${docData.name}`;
+      PANELS.tournamentPanel.querySelector("#tournament-info").innerHTML =
+        `${docData.active ? "Your tournament is active. Click button to deactivate" : "Your tournament is not active. Click button to make it public"}`;
     } else {
       alert("Doc not found!");
     }
@@ -291,6 +326,7 @@ async function createTeam() {
       createdAt: new Date(),
       author: loggedUser.uid,
       name,
+      tournamentId: currentTournamentId,
     };
 
     // SQL: INSERT INTO teams() VALUES ()
@@ -321,14 +357,19 @@ async function showTeams() {
   PANELS.teamsPanel.classList.remove("hidden");
 
   try {
+    const teamsListDiv = document.querySelector("#teams-list");
+    teamsListDiv.innerHTML = ``;
+
     // SQL: SELECT TABLE teams
     const teamsRef = collection(db, "teams");
 
-    // SQL: SELECT * FROM teams
-    const querySnapshot = await getDocs(teamsRef);
+    const teamQuery = query(
+      teamsRef,
+      where("tournamentId", "==", currentTournamentId),
+    );
 
-    const teamsListDiv = document.querySelector("#teams-list");
-    teamsListDiv.innerHTML = ``;
+    // SQL: SELECT * FROM teams
+    const querySnapshot = await getDocs(teamQuery);
 
     querySnapshot.forEach((doc) => {
       const teamDiv = document.createElement("div");
@@ -438,7 +479,9 @@ async function getTeamsMap() {
 
   try {
     const teamsRef = collection(db, "teams");
-    const querySnapshotTeams = await getDocs(teamsRef);
+    const querySnapshotTeams = await getDocs(
+      query(teamsRef, where("tournamentId", "==", currentTournamentId)),
+    );
 
     querySnapshotTeams.forEach((doc) => {
       teamsMap.set(doc.id, doc.data());
@@ -450,19 +493,32 @@ async function getTeamsMap() {
   }
 }
 
+let battlesUnsubscribe = null;
+let currentBattleId = null;
 async function showBattles() {
   document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
   PANELS.battlesPanel.classList.remove("hidden");
 
+  if (typeof battlesUnsubscribe === "function") {
+    battlesUnsubscribe();
+    battlesUnsubscribe = null;
+  }
+
   try {
     const teamsMap = await getTeamsMap();
 
-    const battlesRef = collection(db, "battles");
     const battlesListDiv = PANELS.battlesPanel.querySelector("#battles-list");
+    battlesListDiv.innerHTML = ``;
+
+    const battlesRef = collection(db, "battles");
+    const battlesQuery = query(
+      battlesRef,
+      where("tournamentId", "==", currentTournamentId),
+    );
 
     // Zamiast getDocs tworzymy subskrypcję czasu rzeczywistego
-    const unsubscribe = onSnapshot(
-      battlesRef,
+    battlesUnsubscribe = onSnapshot(
+      battlesQuery,
       (querySnapshotBattles) => {
         battlesListDiv.innerHTML = ``;
 
@@ -477,7 +533,7 @@ async function showBattles() {
 
           const teamStrings = battleTeams.map((teamId) => {
             const teamData = teamsMap.get(teamId);
-            return getPlayersString(teamData?.players || "error");
+            return getPlayersString(teamData?.players || ["error"]);
           });
 
           battleDiv.insertAdjacentHTML(
@@ -492,12 +548,21 @@ async function showBattles() {
 
           battleDiv
             .querySelector(".go-to-battle-btn")
-            ?.addEventListener("click", () => {
+            ?.addEventListener("click", async () => {
+              if (typeof battlesUnsubscribe === "function") {
+                battlesUnsubscribe();
+                battlesUnsubscribe = null;
+              }
+
               document
                 .querySelectorAll(".panel")
                 .forEach((p) => p.classList.add("hidden"));
 
-              addTeamsToRecordTable();
+              currentBattleId = doc.id;
+
+              await addTeamsToRecordTable();
+              renderRecordTableData();
+
               PANELS.battleGamePanel.classList.remove("hidden");
             });
 
@@ -505,7 +570,7 @@ async function showBattles() {
         });
       },
       (error) => {
-        console.error("Błąd nasłuchiwania bitew: ", error);
+        console.error("Battles listening error: ", error);
       },
     );
 
@@ -516,7 +581,7 @@ async function showBattles() {
   }
 }
 
-function getPlayersString(playersArray) {
+function getPlayersString(playersArray = []) {
   let string = `<p class="players-box">`;
   playersArray.forEach((p) => {
     string += `<span title="${p.inGameId || "no in-game id"}">${p.name || "player"}</span>`;
@@ -653,12 +718,6 @@ async function addTeamsToRecordTable() {
 
   const teams = await getTeamsMap();
 
-  battleRecordsTable
-    .querySelector("#new-battle-record-btn")
-    .addEventListener("click", () => {
-      addBattleRecord(teams);
-    });
-
   teams.forEach((team, key) => {
     teamsBattleTable[key] = {};
 
@@ -691,8 +750,53 @@ async function addTeamsToRecordTable() {
     battleRecordsTable.querySelector("tbody").appendChild(penaltyRow);
     teamsBattleTable[key].penaltyRow = penaltyRow;
   });
+
+  battleRecordsTable
+    .querySelector("#new-battle-record-btn")
+    .addEventListener("click", async () => {
+      if (typeof addBattleRecord === "function") {
+        addBattleRecord(teams);
+      }
+    });
 }
 
+function renderRecordTableData() {
+  const battleRef = doc(db, "battles", currentBattleId);
+
+  const unsubscribe = onSnapshot(
+    battleRef,
+    (battleSnapshot) => {
+      if (battleSnapshot.exists()) {
+        battleData = [];
+
+        if (battleSnapshot.data().records) {
+          const records = battleSnapshot.data().records;
+
+          Object.keys(records)
+            .sort((a, b) => Number(a) - Number(b))
+            .forEach((id) => {
+              battleData.push(records[id].data);
+            });
+        }
+
+        showBattleRecordInputs();
+
+        // render
+        console.log("Updated data:", battleData);
+      } else {
+        console.log("Document not found");
+      }
+    },
+    (error) => {
+      console.error("Listening error: ", error);
+    },
+  );
+
+  // Zwracamy funkcję unsubscribe, aby móc wyłączyć nasłuchiwanie w przyszłości
+  return unsubscribe;
+}
+
+// TODO
 function showBattleRecordInputs() {
   const battleRecordsTable = document.querySelector("#battle-records-table");
   if (!battleRecordsTable) {
@@ -701,38 +805,51 @@ function showBattleRecordInputs() {
   }
 }
 
+/**
+ * Saves input data to local battleData variable
+ * @param {*} input
+ * @returns
+ */
 window.handleInput = function (input) {
   const category = input.dataset?.category;
 
-  if (
-    category !== "survivors" &&
-    category !== "penalty" &&
-    category !== "kills" &&
-    category !== "placement"
-  )
+  if (!["survivors", "penalty", "kills", "placement"].includes(category))
     return;
 
-  const value = input.value;
-  const parsedValue = parseInt(value, 10); // 10 - decimal system
+  const value = input.value.trim();
 
-  if (
-    value !== "" &&
-    (isNaN(parsedValue) || !Number.isInteger(Number(value)))
-  ) {
+  if (value === "") {
+    const parentTD = input.parentElement;
+    const teamId = parentTD.dataset.teamid;
+    const recordId = parseInt(parentTD.dataset.recordid, 10);
+
+    if (battleData[recordId]?.[teamId]) {
+      battleData[recordId][teamId][category] = 0;
+    }
+    return;
+  }
+
+  // numbers only
+  if (!/^-?\d+$/.test(value)) {
     input.value = "";
     alert("Incorrect value");
     return;
   }
 
+  const parsedValue = parseInt(value, 10);
   const parentTD = input.parentElement;
-
   const teamId = parentTD.dataset.teamid;
   const recordId = parseInt(parentTD.dataset.recordid, 10);
 
-  battleData[recordId - 1][teamId][category] = parsedValue;
-  console.log({ battleData });
+  if (battleData[recordId]?.[teamId]) {
+    battleData[recordId][teamId][category] = parsedValue;
+  } else console.error("Structure not found");
 };
 
+/**
+ * Creates Column with inputs (new record)
+ * @returns
+ */
 async function addBattleRecord() {
   if (Object.keys(teamsBattleTable).length === 0) {
     console.error("Could not add record to battle table");
@@ -753,11 +870,16 @@ async function addBattleRecord() {
 
   battleRecordsTable
     .querySelector("#record-number-row")
-    //TODO save button
     .insertAdjacentHTML(
       "beforeend",
-      /*html*/ `<td>${battlesAmount + 1} <button class="small-action-button" style="color: orange">save TODO</button></td>`,
+      /*html*/ `<td id="record-${battlesAmount}-save-button-cell">${battlesAmount + 1} <button class="small-action-button" style="color: orange"><i class="bi bi-floppy"></i></button></td>`,
     );
+
+  battleRecordsTable
+    .querySelector(`#record-${battlesAmount}-save-button-cell button`)
+    ?.addEventListener("click", () => {
+      saveBattleData(battlesAmount);
+    });
 
   battleRecordsTable.querySelector("thead tr td#battles-header").colSpan =
     battlesAmount + 1;
@@ -771,7 +893,7 @@ async function addBattleRecord() {
 
     teamTableRow.placementRow.insertAdjacentHTML(
       "beforeend",
-      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount + 1}>
+      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount}>
         <input 
           type="number"
           data-category="placement"
@@ -787,7 +909,7 @@ async function addBattleRecord() {
 
     teamTableRow.killsRow.insertAdjacentHTML(
       "beforeend",
-      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount + 1}>
+      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount}>
         <input 
           type="number"
           data-category="kills"
@@ -803,7 +925,7 @@ async function addBattleRecord() {
 
     teamTableRow.survivorsRow.insertAdjacentHTML(
       "beforeend",
-      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount + 1}>
+      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount}>
         <input 
           type="number"
           data-category="survivors"
@@ -819,7 +941,7 @@ async function addBattleRecord() {
 
     teamTableRow.penaltyRow.insertAdjacentHTML(
       "beforeend",
-      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount + 1}>
+      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount}>
         <input 
           type="number"
           data-category="penalty"
@@ -838,9 +960,26 @@ async function addBattleRecord() {
       survivors: null,
       penalty: null,
     };
-
-    console.log({ battleData });
   });
+}
+
+async function saveBattleData(recordId) {
+  const battleRef = doc(db, "battles", currentBattleId);
+
+  const data = {
+    [`records.${recordId}`]: {
+      lastSaved: new Date(),
+      lastAuthor: loggedUser.uid,
+      data: battleData[recordId],
+    },
+  };
+
+  try {
+    await updateDoc(battleRef, data);
+    alert("Saved");
+  } catch (error) {
+    console.error("Couldn't update data in database: ", error);
+  }
 }
 
 //#endregion
