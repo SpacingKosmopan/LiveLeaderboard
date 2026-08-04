@@ -15,6 +15,7 @@ import {
   doc, // specific doc (reference)
   getDoc, // specific doc (data)
   updateDoc, // update
+  setDoc,
   arrayUnion,
   deleteDoc, // delete
   query,
@@ -22,6 +23,7 @@ import {
   count,
   getCountFromServer,
   onSnapshot,
+  orderBy,
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 //#endregion
@@ -133,8 +135,10 @@ onAuthStateChanged(auth, (user) => {
           <thead>
             <tr>
               <th>Name</th>
+              <th>Author</th>
               <th>Creation date</th>
               <th>Battles amount</th>
+              <th>Status</th>
               <th>Actions <button id="new-tournament-btn" class="small-action-button"><i class="bi bi-plus-circle"></i> new</button></th>
             </tr>
           </thead>
@@ -169,51 +173,77 @@ onAuthStateChanged(auth, (user) => {
 
 //#region tournaments
 
-async function showAllTournaments() {
-  try {
-    const tournamentsRef = collection(db, "tournaments");
-    const querySnapshot = await getDocs(tournamentsRef);
+let tournamentsUnsubscribe = null;
 
+async function showAllTournaments() {
+  if (typeof tournamentsUnsubscribe === "function") {
+    tournamentsUnsubscribe();
+    tournamentsUnsubscribe = null;
+  }
+
+  try {
     const tournamentsTable = document.querySelector("#tournaments-table");
     if (!tournamentsTable) {
       console.error("Tournaments table not found");
       return;
     }
     const tableBody = tournamentsTable.querySelector("tbody");
-    tableBody.innerHTML = "";
 
-    // for...of can do await
-    for (const doc of querySnapshot.docs) {
-      const tournamentData = doc.data();
+    const tournamentsRef = collection(db, "tournaments");
+    const tournamentQuery = query(tournamentsRef, orderBy("createdAt", "desc"));
 
-      const battlesRef = collection(db, "battles");
-      const battlesQuery = query(
-        battlesRef,
-        where("tournamentId", "==", doc.id),
-      );
+    tournamentsUnsubscribe = onSnapshot(
+      tournamentQuery,
+      async (querySnapshot) => {
+        tableBody.innerHTML = "";
 
-      const countSnapshot = await getCountFromServer(battlesQuery);
-      const battlesCount = countSnapshot.data().count;
+        // for ... of allows await
+        for (const doc of querySnapshot.docs) {
+          const tournamentData = doc.data();
 
-      const tRow = document.createElement("tr");
-      tRow.innerHTML = /*html*/ `
-        <td>${tournamentData.name}</td>
-        <td>${tournamentData.createdAt.toDate().toLocaleString("en-EN")}</td>
-        <td>${battlesCount}</td> 
-        <td>
-          <button class="edit-tournament-button small-action-button" data-id="${doc.id}">
-            <i class="bi bi-pencil"></i>
-          </button>
-        </td>  
-      `;
+          const battlesRef = collection(db, "battles");
+          const battlesQuery = query(
+            battlesRef,
+            where("tournamentId", "==", doc.id),
+          );
 
-      const editBtn = tRow.querySelector(".edit-tournament-button");
-      editBtn.addEventListener("click", function () {
-        showTournament(this.dataset.id);
-      });
+          const countSnapshot = await getCountFromServer(battlesQuery);
+          const battlesCount = countSnapshot.data().count;
 
-      tableBody.appendChild(tRow);
-    }
+          const tRow = document.createElement("tr");
+          tRow.innerHTML = /*html*/ `
+            <td>${tournamentData.name || "No name"}</td>
+            <td>${tournamentData.authorUsername || "missing name"}</td>
+            <td>${tournamentData.createdAt?.toDate()?.toLocaleString("en-GB") || ""}</td>
+            <td>${battlesCount}</td> 
+            <td>${tournamentData.active ? `<i class="bi bi-check-circle-fill"></i> active` : `<i class="bi bi-x-circle-fill"></i> inactive`}</td>
+            <td>
+              ${
+                tournamentData.author === loggedUser.uid
+                  ? `owner <button class="edit-tournament-button small-action-button" data-id="${doc.id}">
+                <i class="bi bi-pencil"></i>
+              </button>`
+                  : ""
+              }
+            </td>  
+          `;
+
+          const editBtn = tRow.querySelector(".edit-tournament-button");
+          editBtn?.addEventListener("click", function () {
+            if (typeof tournamentsUnsubscribe === "function") {
+              tournamentsUnsubscribe();
+              tournamentsUnsubscribe = null;
+            }
+            showTournament(this.dataset.id);
+          });
+
+          tableBody.appendChild(tRow);
+        }
+      },
+      (error) => {
+        console.error("Błąd nasłuchiwania turniejów: ", error);
+      },
+    );
   } catch (error) {
     console.error("Couldn't get data from database: ", error);
   }
@@ -229,10 +259,14 @@ async function newTournament() {
   try {
     const tournamentsRef = collection(db, "tournaments");
 
+    const userName = loggedUser.email.split("@")[0].toUpperCase();
+
     const newTournamentData = {
+      name,
       createdAt: new Date(),
       author: loggedUser.uid,
-      name,
+      authorUsername: userName,
+      active: false,
     };
 
     const docRef = await addDoc(tournamentsRef, newTournamentData);
@@ -257,11 +291,12 @@ async function showTournament(id) {
     const docSnapshot = await getDoc(doc(db, "tournaments", id));
 
     if (docSnapshot.exists()) {
-      console.log("Doc data:", docSnapshot.data());
       const docData = docSnapshot.data();
 
       PANELS.tournamentPanel.querySelector("#tournament-name").innerHTML =
         `${docData.name}`;
+      PANELS.tournamentPanel.querySelector("#tournament-info").innerHTML =
+        `${docData.active ? "Your tournament is active. Click button to deactivate" : "Your tournament is not active. Click button to make it public"}`;
     } else {
       alert("Doc not found!");
     }
@@ -291,6 +326,7 @@ async function createTeam() {
       createdAt: new Date(),
       author: loggedUser.uid,
       name,
+      tournamentId: currentTournamentId,
     };
 
     // SQL: INSERT INTO teams() VALUES ()
@@ -321,14 +357,19 @@ async function showTeams() {
   PANELS.teamsPanel.classList.remove("hidden");
 
   try {
+    const teamsListDiv = document.querySelector("#teams-list");
+    teamsListDiv.innerHTML = ``;
+
     // SQL: SELECT TABLE teams
     const teamsRef = collection(db, "teams");
 
-    // SQL: SELECT * FROM teams
-    const querySnapshot = await getDocs(teamsRef);
+    const teamQuery = query(
+      teamsRef,
+      where("tournamentId", "==", currentTournamentId),
+    );
 
-    const teamsListDiv = document.querySelector("#teams-list");
-    teamsListDiv.innerHTML = ``;
+    // SQL: SELECT * FROM teams
+    const querySnapshot = await getDocs(teamQuery);
 
     querySnapshot.forEach((doc) => {
       const teamDiv = document.createElement("div");
@@ -438,7 +479,9 @@ async function getTeamsMap() {
 
   try {
     const teamsRef = collection(db, "teams");
-    const querySnapshotTeams = await getDocs(teamsRef);
+    const querySnapshotTeams = await getDocs(
+      query(teamsRef, where("tournamentId", "==", currentTournamentId)),
+    );
 
     querySnapshotTeams.forEach((doc) => {
       teamsMap.set(doc.id, doc.data());
@@ -450,19 +493,32 @@ async function getTeamsMap() {
   }
 }
 
+let battlesUnsubscribe = null;
+let currentBattleId = null;
 async function showBattles() {
   document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
   PANELS.battlesPanel.classList.remove("hidden");
 
+  if (typeof battlesUnsubscribe === "function") {
+    battlesUnsubscribe();
+    battlesUnsubscribe = null;
+  }
+
   try {
     const teamsMap = await getTeamsMap();
 
-    const battlesRef = collection(db, "battles");
     const battlesListDiv = PANELS.battlesPanel.querySelector("#battles-list");
+    battlesListDiv.innerHTML = ``;
+
+    const battlesRef = collection(db, "battles");
+    const battlesQuery = query(
+      battlesRef,
+      where("tournamentId", "==", currentTournamentId),
+    );
 
     // Zamiast getDocs tworzymy subskrypcję czasu rzeczywistego
-    const unsubscribe = onSnapshot(
-      battlesRef,
+    battlesUnsubscribe = onSnapshot(
+      battlesQuery,
       (querySnapshotBattles) => {
         battlesListDiv.innerHTML = ``;
 
@@ -477,7 +533,7 @@ async function showBattles() {
 
           const teamStrings = battleTeams.map((teamId) => {
             const teamData = teamsMap.get(teamId);
-            return getPlayersString(teamData?.players || "error");
+            return getPlayersString(teamData?.players || ["error"]);
           });
 
           battleDiv.insertAdjacentHTML(
@@ -492,12 +548,21 @@ async function showBattles() {
 
           battleDiv
             .querySelector(".go-to-battle-btn")
-            ?.addEventListener("click", () => {
+            ?.addEventListener("click", async () => {
+              if (typeof battlesUnsubscribe === "function") {
+                battlesUnsubscribe();
+                battlesUnsubscribe = null;
+              }
+
               document
                 .querySelectorAll(".panel")
                 .forEach((p) => p.classList.add("hidden"));
 
-              addTeamsToRecordTable();
+              currentBattleId = doc.id;
+
+              await addTeamsToRecordTable();
+              renderRecordTableData(teamsMap);
+
               PANELS.battleGamePanel.classList.remove("hidden");
             });
 
@@ -505,7 +570,7 @@ async function showBattles() {
         });
       },
       (error) => {
-        console.error("Błąd nasłuchiwania bitew: ", error);
+        console.error("Battles listening error: ", error);
       },
     );
 
@@ -516,7 +581,7 @@ async function showBattles() {
   }
 }
 
-function getPlayersString(playersArray) {
+function getPlayersString(playersArray = []) {
   let string = `<p class="players-box">`;
   playersArray.forEach((p) => {
     string += `<span title="${p.inGameId || "no in-game id"}">${p.name || "player"}</span>`;
@@ -624,7 +689,12 @@ async function createBattle(teams) {
 
 let teamsBattleTable = {};
 let battleData = [];
+let editingRecords = [];
 
+/**
+ * Creates table structure (teams -> rows)
+ * @returns
+ */
 async function addTeamsToRecordTable() {
   const battleRecordsTable = document.querySelector("#battle-records-table");
   if (!battleRecordsTable) {
@@ -652,12 +722,6 @@ async function addTeamsToRecordTable() {
   `;
 
   const teams = await getTeamsMap();
-
-  battleRecordsTable
-    .querySelector("#new-battle-record-btn")
-    .addEventListener("click", () => {
-      addBattleRecord(teams);
-    });
 
   teams.forEach((team, key) => {
     teamsBattleTable[key] = {};
@@ -691,156 +755,268 @@ async function addTeamsToRecordTable() {
     battleRecordsTable.querySelector("tbody").appendChild(penaltyRow);
     teamsBattleTable[key].penaltyRow = penaltyRow;
   });
+
+  battleRecordsTable
+    .querySelector("#new-battle-record-btn")
+    .addEventListener("click", async () => {
+      if (typeof addBattleRecord === "function") {
+        addBattleRecord(teams);
+      }
+    });
+
+  window.currentBattleUnsubscribe = renderRecordTableData(teams);
 }
 
-function showBattleRecordInputs() {
+function renderRecordTableData(teams) {
+  const battleRef = doc(db, "battles", currentBattleId);
+
+  const unsubscribe = onSnapshot(
+    battleRef,
+    (battleSnapshot) => {
+      if (battleSnapshot.exists()) {
+        battleData = [];
+
+        if (battleSnapshot.data().records) {
+          const records = battleSnapshot.data().records;
+          battleData = [];
+
+          Object.keys(records)
+            .sort((a, b) => Number(a) - Number(b))
+            .forEach((id) => {
+              battleData.push(records[id].data || {});
+            });
+        }
+
+        showBattleRecordInputs(teams);
+
+        console.log("Updated data:", battleData);
+      } else {
+        console.log("Document not found");
+      }
+    },
+    (error) => {
+      console.error("Listening error: ", error);
+    },
+  );
+
+  return unsubscribe;
+}
+
+function showBattleRecordInputs(teams) {
   const battleRecordsTable = document.querySelector("#battle-records-table");
-  if (!battleRecordsTable) {
-    console.error("Battle records table not found");
-    return;
-  }
+  if (!battleRecordsTable) return;
+
+  document.querySelector("#record-number-row").innerHTML = "";
+
+  teams.forEach((_, key) => {
+    const rows = [
+      teamsBattleTable[key].placementRow,
+      teamsBattleTable[key].killsRow,
+      teamsBattleTable[key].survivorsRow,
+      teamsBattleTable[key].penaltyRow,
+    ];
+    rows.forEach((row, index) => {
+      const keepCount = index === 0 ? 2 : 1;
+      while (row.cells.length > keepCount) {
+        row.deleteCell(-1);
+      }
+    });
+  });
+
+  const totalBattles = battleData.length;
+  document.querySelector("#battles-header").colSpan =
+    totalBattles > 0 ? totalBattles : 1;
+
+  battleData.forEach((battleRecord, recordId) => {
+    const isEditing = editingRecords.includes(recordId);
+
+    const headerCell = document.createElement("td");
+    headerCell.id = `record-${recordId}-action-cell`;
+
+    if (isEditing) {
+      headerCell.innerHTML = `
+    ${recordId + 1} 
+    <button class="small-action-button" style="color: orange" data-recordid="${recordId}" data-action="save" title="Save"><i class="bi bi-floppy"></i></button>
+    <button class="small-action-button" style="color: crimson" data-recordid="${recordId}" data-action="cancel" title="Cancel"><i class="bi bi-x-circle"></i></button>
+  `;
+    } else {
+      headerCell.innerHTML = `
+    ${recordId + 1} 
+    <button class="small-action-button" style="color: dodgerblue" data-recordid="${recordId}" data-action="edit" title="Edit"><i class="bi bi-pencil"></i></button>
+  `;
+    }
+    document.querySelector("#record-number-row").appendChild(headerCell);
+
+    headerCell.querySelectorAll("button").forEach((button) => {
+      button.addEventListener("click", (e) => {
+        const btn = e.currentTarget;
+        const rId = parseInt(btn.dataset.recordid);
+        const action = btn.dataset.action;
+
+        if (action === "edit") {
+          editingRecords.push(rId);
+          showBattleRecordInputs(teams);
+        } else if (action === "save") {
+          saveBattleData(rId, teams);
+        } else if (action === "cancel") {
+          cancelBattleEdit(rId, teams);
+        }
+      });
+    });
+
+    teams.forEach((_, teamKey) => {
+      const teamData = battleRecord[teamKey] || {
+        placement: null,
+        kills: null,
+        survivors: null,
+        penalty: null,
+      };
+
+      const getCellContent = (category, value, min, max) => {
+        if (isEditing) {
+          return `<input 
+            type="number" 
+            value="${value ?? ""}" 
+            data-category="${category}" 
+            class="battle-table-record-input" 
+            oninput="handleInput(this)"
+            ${min !== undefined ? `min="${min}"` : ""} 
+            ${max !== undefined ? `max="${max}"` : ""} 
+            step="1">`;
+        } else {
+          return `<span>${value ?? "-"}</span>`;
+        }
+      };
+
+      teamsBattleTable[teamKey].placementRow.insertAdjacentHTML(
+        "beforeend",
+        `<td data-teamid="${teamKey}" data-recordid="${recordId}">${getCellContent("placement", teamData.placement, 1, 12)}</td>`,
+      );
+
+      teamsBattleTable[teamKey].killsRow.insertAdjacentHTML(
+        "beforeend",
+        `<td data-teamid="${teamKey}" data-recordid="${recordId}">${getCellContent("kills", teamData.kills, 0, 12)}</td>`,
+      );
+
+      teamsBattleTable[teamKey].survivorsRow.insertAdjacentHTML(
+        "beforeend",
+        `<td data-teamid="${teamKey}" data-recordid="${recordId}">${getCellContent("survivors", teamData.survivors, 0, 5)}</td>`,
+      );
+
+      teamsBattleTable[teamKey].penaltyRow.insertAdjacentHTML(
+        "beforeend",
+        `<td data-teamid="${teamKey}" data-recordid="${recordId}">${getCellContent("penalty", teamData.penalty, 0)}</td>`,
+      );
+    });
+  });
 }
 
+function cancelBattleEdit(recordId, teams) {
+  editingRecords = editingRecords.filter((id) => id !== recordId);
+
+  if (recordId === battleData.length - 1) {
+    const isNewUnsaved = !window.lastFirebaseRecordsSnapshot?.[recordId];
+    if (isNewUnsaved) {
+      battleData.pop();
+    }
+  }
+
+  showBattleRecordInputs(teams);
+}
+
+/**
+ * Saves input data to local battleData variable
+ * @param {*} input
+ * @returns
+ */
 window.handleInput = function (input) {
   const category = input.dataset?.category;
 
-  if (
-    category !== "survivors" &&
-    category !== "penalty" &&
-    category !== "kills" &&
-    category !== "placement"
-  )
+  if (!["survivors", "penalty", "kills", "placement"].includes(category))
     return;
 
-  const value = input.value;
-  const parsedValue = parseInt(value, 10); // 10 - decimal system
+  const value = input.value.trim();
 
-  if (
-    value !== "" &&
-    (isNaN(parsedValue) || !Number.isInteger(Number(value)))
-  ) {
+  if (value === "") {
+    const parentTD = input.parentElement;
+    const teamId = parentTD.dataset.teamid;
+    const recordId = parseInt(parentTD.dataset.recordid, 10);
+
+    if (battleData[recordId]?.[teamId]) {
+      battleData[recordId][teamId][category] = null;
+    }
+    return;
+  }
+
+  // numbers only
+  if (!/^-?\d+$/.test(value)) {
     input.value = "";
     alert("Incorrect value");
     return;
   }
 
+  const parsedValue = parseInt(value, 10);
   const parentTD = input.parentElement;
-
   const teamId = parentTD.dataset.teamid;
   const recordId = parseInt(parentTD.dataset.recordid, 10);
 
-  battleData[recordId - 1][teamId][category] = parsedValue;
-  console.log({ battleData });
+  if (battleData[recordId]?.[teamId]) {
+    battleData[recordId][teamId][category] = parsedValue;
+  } else console.error("Structure not found");
 };
 
+/**
+ * Creates Column with inputs (new record)
+ * @returns
+ */
 async function addBattleRecord() {
   if (Object.keys(teamsBattleTable).length === 0) {
     console.error("Could not add record to battle table");
     return;
   }
 
-  const battleRecordsTable = document.querySelector("#battle-records-table");
-  if (!battleRecordsTable) {
-    console.error("Battle records table not found");
-    return;
-  }
-
   const teams = await getTeamsMap();
-
   const battlesAmount = battleData.length;
 
-  battleData.push({});
-
-  battleRecordsTable
-    .querySelector("#record-number-row")
-    //TODO save button
-    .insertAdjacentHTML(
-      "beforeend",
-      /*html*/ `<td>${battlesAmount + 1} <button class="small-action-button" style="color: orange">save TODO</button></td>`,
-    );
-
-  battleRecordsTable.querySelector("thead tr td#battles-header").colSpan =
-    battlesAmount + 1;
-
-  teams.forEach((team, key) => {
-    const teamTableRow = teamsBattleTable[key];
-    if (!teamTableRow) {
-      console.error("Team row not found");
-      return;
-    }
-
-    teamTableRow.placementRow.insertAdjacentHTML(
-      "beforeend",
-      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount + 1}>
-        <input 
-          type="number"
-          data-category="placement"
-          class="battle-table-record-input"
-          oninput="handleInput(this)"
-          
-          min="1"
-          max="12"
-          step="1"
-          >
-      </td>`,
-    );
-
-    teamTableRow.killsRow.insertAdjacentHTML(
-      "beforeend",
-      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount + 1}>
-        <input 
-          type="number"
-          data-category="kills"
-          class="battle-table-record-input"
-          oninput="handleInput(this)"
-          
-          min="0"
-          max="12"
-          step="1"
-          >
-      </td>`,
-    );
-
-    teamTableRow.survivorsRow.insertAdjacentHTML(
-      "beforeend",
-      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount + 1}>
-        <input 
-          type="number"
-          data-category="survivors"
-          class="battle-table-record-input"
-          oninput="handleInput(this)"
-          
-          min="0"
-          max="5"
-          step="1"
-          >
-      </td>`,
-    );
-
-    teamTableRow.penaltyRow.insertAdjacentHTML(
-      "beforeend",
-      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount + 1}>
-        <input 
-          type="number"
-          data-category="penalty"
-          class="battle-table-record-input"
-          oninput="handleInput(this)"
-          
-          min="0"
-          step="1"
-          >
-      </td>`,
-    );
-
-    battleData[battleData.length - 1][key] = {
+  const newRecord = {};
+  teams.forEach((_, key) => {
+    newRecord[key] = {
       placement: null,
       kills: null,
       survivors: null,
       penalty: null,
     };
-
-    console.log({ battleData });
   });
+
+  battleData.push(newRecord);
+
+  editingRecords.push(battlesAmount);
+
+  showBattleRecordInputs(teams);
+}
+
+async function saveBattleData(recordId, teams) {
+  const battleRef = doc(db, "battles", currentBattleId);
+
+  const data = {
+    [`records.${recordId}`]: {
+      lastSaved: new Date(),
+      lastAuthor: loggedUser.uid,
+      data: battleData[recordId],
+    },
+  };
+
+  try {
+    await updateDoc(battleRef, data);
+
+    editingRecords = editingRecords.filter((id) => id !== recordId);
+
+    showBattleRecordInputs(teams);
+
+    console.log("Saved successfully");
+  } catch (error) {
+    console.error("Couldn't update data in database: ", error);
+  }
 }
 
 //#endregion
