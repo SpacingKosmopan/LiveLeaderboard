@@ -561,7 +561,7 @@ async function showBattles() {
               currentBattleId = doc.id;
 
               await addTeamsToRecordTable();
-              renderRecordTableData();
+              renderRecordTableData(teamsMap);
 
               PANELS.battleGamePanel.classList.remove("hidden");
             });
@@ -689,7 +689,12 @@ async function createBattle(teams) {
 
 let teamsBattleTable = {};
 let battleData = [];
+let editingRecords = [];
 
+/**
+ * Creates table structure (teams -> rows)
+ * @returns
+ */
 async function addTeamsToRecordTable() {
   const battleRecordsTable = document.querySelector("#battle-records-table");
   if (!battleRecordsTable) {
@@ -758,9 +763,11 @@ async function addTeamsToRecordTable() {
         addBattleRecord(teams);
       }
     });
+
+  window.currentBattleUnsubscribe = renderRecordTableData(teams);
 }
 
-function renderRecordTableData() {
+function renderRecordTableData(teams) {
   const battleRef = doc(db, "battles", currentBattleId);
 
   const unsubscribe = onSnapshot(
@@ -771,17 +778,17 @@ function renderRecordTableData() {
 
         if (battleSnapshot.data().records) {
           const records = battleSnapshot.data().records;
+          battleData = [];
 
           Object.keys(records)
             .sort((a, b) => Number(a) - Number(b))
             .forEach((id) => {
-              battleData.push(records[id].data);
+              battleData.push(records[id].data || {});
             });
         }
 
-        showBattleRecordInputs();
+        showBattleRecordInputs(teams);
 
-        // render
         console.log("Updated data:", battleData);
       } else {
         console.log("Document not found");
@@ -792,17 +799,129 @@ function renderRecordTableData() {
     },
   );
 
-  // Zwracamy funkcję unsubscribe, aby móc wyłączyć nasłuchiwanie w przyszłości
   return unsubscribe;
 }
 
-// TODO
-function showBattleRecordInputs() {
+function showBattleRecordInputs(teams) {
   const battleRecordsTable = document.querySelector("#battle-records-table");
-  if (!battleRecordsTable) {
-    console.error("Battle records table not found");
-    return;
+  if (!battleRecordsTable) return;
+
+  document.querySelector("#record-number-row").innerHTML = "";
+
+  teams.forEach((_, key) => {
+    const rows = [
+      teamsBattleTable[key].placementRow,
+      teamsBattleTable[key].killsRow,
+      teamsBattleTable[key].survivorsRow,
+      teamsBattleTable[key].penaltyRow,
+    ];
+    rows.forEach((row, index) => {
+      const keepCount = index === 0 ? 2 : 1;
+      while (row.cells.length > keepCount) {
+        row.deleteCell(-1);
+      }
+    });
+  });
+
+  const totalBattles = battleData.length;
+  document.querySelector("#battles-header").colSpan =
+    totalBattles > 0 ? totalBattles : 1;
+
+  battleData.forEach((battleRecord, recordId) => {
+    const isEditing = editingRecords.includes(recordId);
+
+    const headerCell = document.createElement("td");
+    headerCell.id = `record-${recordId}-action-cell`;
+
+    if (isEditing) {
+      headerCell.innerHTML = `
+    ${recordId + 1} 
+    <button class="small-action-button" style="color: orange" data-recordid="${recordId}" data-action="save" title="Save"><i class="bi bi-floppy"></i></button>
+    <button class="small-action-button" style="color: crimson" data-recordid="${recordId}" data-action="cancel" title="Cancel"><i class="bi bi-x-circle"></i></button>
+  `;
+    } else {
+      headerCell.innerHTML = `
+    ${recordId + 1} 
+    <button class="small-action-button" style="color: dodgerblue" data-recordid="${recordId}" data-action="edit" title="Edit"><i class="bi bi-pencil"></i></button>
+  `;
+    }
+    document.querySelector("#record-number-row").appendChild(headerCell);
+
+    headerCell.querySelectorAll("button").forEach((button) => {
+      button.addEventListener("click", (e) => {
+        const btn = e.currentTarget;
+        const rId = parseInt(btn.dataset.recordid);
+        const action = btn.dataset.action;
+
+        if (action === "edit") {
+          editingRecords.push(rId);
+          showBattleRecordInputs(teams);
+        } else if (action === "save") {
+          saveBattleData(rId, teams);
+        } else if (action === "cancel") {
+          cancelBattleEdit(rId, teams);
+        }
+      });
+    });
+
+    teams.forEach((_, teamKey) => {
+      const teamData = battleRecord[teamKey] || {
+        placement: null,
+        kills: null,
+        survivors: null,
+        penalty: null,
+      };
+
+      const getCellContent = (category, value, min, max) => {
+        if (isEditing) {
+          return `<input 
+            type="number" 
+            value="${value ?? ""}" 
+            data-category="${category}" 
+            class="battle-table-record-input" 
+            oninput="handleInput(this)"
+            ${min !== undefined ? `min="${min}"` : ""} 
+            ${max !== undefined ? `max="${max}"` : ""} 
+            step="1">`;
+        } else {
+          return `<span>${value ?? "-"}</span>`;
+        }
+      };
+
+      teamsBattleTable[teamKey].placementRow.insertAdjacentHTML(
+        "beforeend",
+        `<td data-teamid="${teamKey}" data-recordid="${recordId}">${getCellContent("placement", teamData.placement, 1, 12)}</td>`,
+      );
+
+      teamsBattleTable[teamKey].killsRow.insertAdjacentHTML(
+        "beforeend",
+        `<td data-teamid="${teamKey}" data-recordid="${recordId}">${getCellContent("kills", teamData.kills, 0, 12)}</td>`,
+      );
+
+      teamsBattleTable[teamKey].survivorsRow.insertAdjacentHTML(
+        "beforeend",
+        `<td data-teamid="${teamKey}" data-recordid="${recordId}">${getCellContent("survivors", teamData.survivors, 0, 5)}</td>`,
+      );
+
+      teamsBattleTable[teamKey].penaltyRow.insertAdjacentHTML(
+        "beforeend",
+        `<td data-teamid="${teamKey}" data-recordid="${recordId}">${getCellContent("penalty", teamData.penalty, 0)}</td>`,
+      );
+    });
+  });
+}
+
+function cancelBattleEdit(recordId, teams) {
+  editingRecords = editingRecords.filter((id) => id !== recordId);
+
+  if (recordId === battleData.length - 1) {
+    const isNewUnsaved = !window.lastFirebaseRecordsSnapshot?.[recordId];
+    if (isNewUnsaved) {
+      battleData.pop();
+    }
   }
+
+  showBattleRecordInputs(teams);
 }
 
 /**
@@ -824,7 +943,7 @@ window.handleInput = function (input) {
     const recordId = parseInt(parentTD.dataset.recordid, 10);
 
     if (battleData[recordId]?.[teamId]) {
-      battleData[recordId][teamId][category] = 0;
+      battleData[recordId][teamId][category] = null;
     }
     return;
   }
@@ -856,114 +975,27 @@ async function addBattleRecord() {
     return;
   }
 
-  const battleRecordsTable = document.querySelector("#battle-records-table");
-  if (!battleRecordsTable) {
-    console.error("Battle records table not found");
-    return;
-  }
-
   const teams = await getTeamsMap();
-
   const battlesAmount = battleData.length;
 
-  battleData.push({});
-
-  battleRecordsTable
-    .querySelector("#record-number-row")
-    .insertAdjacentHTML(
-      "beforeend",
-      /*html*/ `<td id="record-${battlesAmount}-save-button-cell">${battlesAmount + 1} <button class="small-action-button" style="color: orange"><i class="bi bi-floppy"></i></button></td>`,
-    );
-
-  battleRecordsTable
-    .querySelector(`#record-${battlesAmount}-save-button-cell button`)
-    ?.addEventListener("click", () => {
-      saveBattleData(battlesAmount);
-    });
-
-  battleRecordsTable.querySelector("thead tr td#battles-header").colSpan =
-    battlesAmount + 1;
-
-  teams.forEach((team, key) => {
-    const teamTableRow = teamsBattleTable[key];
-    if (!teamTableRow) {
-      console.error("Team row not found");
-      return;
-    }
-
-    teamTableRow.placementRow.insertAdjacentHTML(
-      "beforeend",
-      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount}>
-        <input 
-          type="number"
-          data-category="placement"
-          class="battle-table-record-input"
-          oninput="handleInput(this)"
-          
-          min="1"
-          max="12"
-          step="1"
-          >
-      </td>`,
-    );
-
-    teamTableRow.killsRow.insertAdjacentHTML(
-      "beforeend",
-      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount}>
-        <input 
-          type="number"
-          data-category="kills"
-          class="battle-table-record-input"
-          oninput="handleInput(this)"
-          
-          min="0"
-          max="12"
-          step="1"
-          >
-      </td>`,
-    );
-
-    teamTableRow.survivorsRow.insertAdjacentHTML(
-      "beforeend",
-      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount}>
-        <input 
-          type="number"
-          data-category="survivors"
-          class="battle-table-record-input"
-          oninput="handleInput(this)"
-          
-          min="0"
-          max="5"
-          step="1"
-          >
-      </td>`,
-    );
-
-    teamTableRow.penaltyRow.insertAdjacentHTML(
-      "beforeend",
-      /*html*/ `<td data-teamid="${key}" data-recordid=${battlesAmount}>
-        <input 
-          type="number"
-          data-category="penalty"
-          class="battle-table-record-input"
-          oninput="handleInput(this)"
-          
-          min="0"
-          step="1"
-          >
-      </td>`,
-    );
-
-    battleData[battleData.length - 1][key] = {
+  const newRecord = {};
+  teams.forEach((_, key) => {
+    newRecord[key] = {
       placement: null,
       kills: null,
       survivors: null,
       penalty: null,
     };
   });
+
+  battleData.push(newRecord);
+
+  editingRecords.push(battlesAmount);
+
+  showBattleRecordInputs(teams);
 }
 
-async function saveBattleData(recordId) {
+async function saveBattleData(recordId, teams) {
   const battleRef = doc(db, "battles", currentBattleId);
 
   const data = {
@@ -976,7 +1008,12 @@ async function saveBattleData(recordId) {
 
   try {
     await updateDoc(battleRef, data);
-    alert("Saved");
+
+    editingRecords = editingRecords.filter((id) => id !== recordId);
+
+    showBattleRecordInputs(teams);
+
+    console.log("Saved successfully");
   } catch (error) {
     console.error("Couldn't update data in database: ", error);
   }
