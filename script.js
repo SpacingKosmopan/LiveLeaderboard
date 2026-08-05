@@ -104,7 +104,7 @@ function getActiveTournaments() {
             /*html*/ ` <div class="leaderboard-row rankClass">
                     <div class="row-indicator"></div>
                     <div class="player-info">
-                      <span class="player-name">${tournamentData.name}</span>
+                      <span class="player-name">${tournamentData.name} by ${tournamentData.authorUsername}</span>
                     </div>
                     <div class="player-score">
                       <button class="small-action-button" onclick="showTournamentBattles('${tournamentId}')"><i class="bi bi-arrow-right"></i></button>
