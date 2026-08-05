@@ -104,7 +104,7 @@ function getActiveTournaments() {
             /*html*/ ` <div class="leaderboard-row rankClass">
                     <div class="row-indicator"></div>
                     <div class="player-info">
-                      <span class="player-name">${tournamentData.name}</span>
+                      <span class="player-name">${tournamentData.name} by ${tournamentData.authorUsername}</span>
                     </div>
                     <div class="player-score">
                       <button class="small-action-button" onclick="showTournamentBattles('${tournamentId}')"><i class="bi bi-arrow-right"></i></button>
@@ -147,7 +147,7 @@ async function getTeamsMap(currentTournamentId) {
 function getPlayersString(playersArray = []) {
   let string = `<p class="players-box">`;
   playersArray.forEach((p) => {
-    string += `<span title="${p.inGameId || "no in-game id"}">${p.name || "player"}</span>`;
+    string += `&nbsp;<span title="${p.inGameId || "no in-game id"}">${p.name || "player"}</span>`;
   });
   string += `</p>`;
 
@@ -228,7 +228,7 @@ window.showBattle = async function (battleId) {
 
     DB_STREAMS.active.tournament = onSnapshot(
       battleRef,
-      (querySnapshot) => {
+      async (querySnapshot) => {
         if (!container) {
           console.error("Leaderboard table not found");
           return;
@@ -236,10 +236,14 @@ window.showBattle = async function (battleId) {
         container.innerHTML = "";
         document.querySelector("#container-name").innerHTML = `BATTLE`;
 
-        const battleDataRaw = querySnapshot.data().records;
+        const battleDataRaw = querySnapshot.data();
+        const battleDataRawRecords = battleDataRaw.records;
+
+        const teamsMap = await getTeamsMap(battleDataRaw.tournamentId);
 
         // Object -> Array
-        const battleData = Object.values(battleDataRaw);
+
+        const battleData = Object.values(battleDataRawRecords || {});
 
         const displayData = battleData.reduce((map, battle) => {
           if (battle && battle.data) {
@@ -263,24 +267,140 @@ window.showBattle = async function (battleId) {
           return map;
         }, {});
 
-        console.log(displayData);
+        /*
+        === POINTS SYSTEM ===
+        🏅 Placement Points
 
-        Object.entries(displayData).forEach(([teamId, gamesList]) => {
-          //gamesList.forEach((game, index) => {});
-          container.insertAdjacentHTML(
+        🥇 1st Place: +3 Points
+        🥈 2nd Place: +2 Points
+        🥉 3rd Place: +1 Point
+        4️⃣ 4th Place: 0 Points
+        5️⃣ 5th Place: 0 Points
+
+        ⚔️ Kill Points
+        Every elimination is worth +2 Points.
+
+        ⚠️ Rule Violations
+        Any team found violating the tournament rules will receive a -3 Point deduction per violation. The tournament staff reserves the right to issue additional penalties or disqualifications for repeated or severe rule violations.
+        */
+
+        const teamsPoints = Object.entries(displayData).map(
+          ([teamId, gamesData]) => {
+            const placementPoints = gamesData.placement.reduce(
+              // accumulator is the previous value
+              (accumulator, placement) => {
+                const points =
+                  placement === 1
+                    ? 3
+                    : placement === 2
+                      ? 2
+                      : placement === 3
+                        ? 1
+                        : 0;
+
+                return accumulator + points;
+              },
+              0, // base value
+            );
+
+            const killsPoints = gamesData.kills.reduce(
+              // accumulator is the previous value
+              (accumulator, kills) => {
+                const points = kills * 2;
+
+                return accumulator + points;
+              },
+              0, // base value
+            );
+
+            const penaltyPoints = gamesData.penalty.reduce(
+              // accumulator is the previous value
+              (accumulator, penalty) => {
+                return accumulator + penalty;
+              },
+              0, // base value
+            );
+
+            const totalSurvivors = gamesData.survivors
+              ? gamesData.survivors.reduce((accumulator, survivors) => {
+                  return accumulator + survivors;
+                }, 0)
+              : 0;
+
+            const teamData = teamsMap.get(teamId);
+
+            return {
+              teamId: teamId,
+              points: placementPoints + killsPoints - penaltyPoints,
+              players: teamData.players,
+              killsPoints,
+              placementPoints,
+              penaltyPoints,
+              totalSurvivors,
+              teamName: teamData.name,
+            };
+
+            /*container.insertAdjacentHTML(
             "beforeend",
-            /*html*/ `
+             `
             <div class="leaderboard-row rankClass">
               <div class="row-indicator"></div>
 
-               <div class="team-info">teamId=${teamId}:> ${JSON.stringify(gamesList)}</div>
+              <div class="team-info">teamId=${teamId}</div>
               
               <div class="player-score">
-                <button class="small-action-button" onclick="showBattle('${doc.id}')"><i class="bi bi-arrow-right"></i></button>
+                <span class="score-val">${placementPoints + killsPoints - penaltyPoints}</span>
+                <span class="score-label">PTS</span>
               </div>
             </div>`,
+          );*/
+          },
+        );
+
+        teamsPoints.sort((a, b) => {
+          return (
+            b.points - a.points || // 1. Sort by points
+            b.killsPoints - a.killsPoints || // 2. Sort by kills
+            b.totalSurvivors - a.totalSurvivors // 3. Sort by survivors
           );
         });
+
+        let htmlContent = "";
+
+        teamsPoints.forEach((team, index) => {
+          const rank = index + 1;
+          let rankClass = "";
+          let crownSparkle = "";
+
+          if (rank === 1) {
+            rankClass = "rank-1";
+
+            crownSparkle = '<span class="cyber-crown"></span>';
+          } else if (rank === 2) {
+            rankClass = "rank-2";
+          } else if (rank === 3) {
+            rankClass = "rank-3";
+          }
+
+          const formattedRank = rank < 10 ? `0${rank}` : rank;
+          const formattedPoints = team.points.toLocaleString();
+
+          htmlContent += `
+            <div class="leaderboard-row ${rankClass}">
+              <div class="row-indicator"></div>
+              <div class="player-rank">${formattedRank}</div>
+              <div class="player-info">
+                <span class="player-name">${team.teamName}: ${getPlayersString(team.players)} ${crownSparkle}</span>
+              </div>
+              <div class="player-score">
+                <span class="score-val">${formattedPoints}</span>
+                <span class="score-label">PTS</span>
+              </div>
+            </div>
+          `;
+        });
+
+        container.innerHTML = htmlContent;
       },
       (error) => {
         console.error("Stream error (battle): ", error);

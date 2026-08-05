@@ -223,7 +223,14 @@ body {
   position: absolute;
   inset: 0;
   z-index: -1;
-  clip-path: polygon(0 0, 90% 0, 100% 30%, 100% 100%, 10% 100%, 0 70%);
+  clip-path: polygon(
+    0 0,
+    calc(100% - 10px) 0,
+    100% 10px,
+    100% 100%,
+    10px 100%,
+    0 calc(100% - 10px)
+  );
 }
 
 .tag-cyan::after {
@@ -326,7 +333,7 @@ body {
 
 .player-name {
   color: #ffffff;
-  font-size: 30px;
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -419,6 +426,20 @@ body {
 .leaderboard-row.rank-2 .score-val {
   color: #00f0ff;
   text-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+}
+
+.leaderboard-row.rank-3 {
+  background: #140d04;
+  border-color: rgba(2cd7, 137, 54, 0.25);
+}
+.leaderboard-row.rank-3 .row-indicator {
+  background: #cd7f32;
+  box-shadow: 0 0 10px #cd7f32;
+}
+.leaderboard-row.rank-3 .player-rank,
+.leaderboard-row.rank-3 .score-val {
+  color: #cd7f32;
+  text-shadow: 0 0 6px rgba(205, 127, 50, 0.4);
 }
 
 /* CROWN SPARKLE */
