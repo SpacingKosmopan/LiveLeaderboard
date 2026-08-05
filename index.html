@@ -12,8 +12,11 @@
     />
   </head>
   <body>
+    <header></header>
+
     <div class="cyber-bg-ambient"></div>
 
+    <!--
     <div class="bullet-echo-container">
       <div class="cyber-panel leaderboard-panel">
         <div class="cyber-grid-bg"></div>
@@ -37,7 +40,33 @@
         <div class="leaderboard-list" id="leaderboard-data"></div>
       </div>
     </div>
+  -->
 
+    <div class="bullet-echo-container">
+      <div class="cyber-panel leaderboard-panel">
+        <div class="cyber-grid-bg"></div>
+        <div class="cyber-corner-accent top-left"></div>
+        <div class="cyber-corner-accent bottom-right"></div>
+
+        <div class="cyber-sparkle sparkle-l1"></div>
+        <div class="cyber-sparkle sparkle-l2"></div>
+
+        <div class="cyber-header">
+          <div class="cyber-title-area">
+            <h1 class="cyber-hero-name" id="container-name">LEADERBOARD</h1>
+            <div class="cyber-tag-wrapper">
+              <span class="cyber-tag tag-golden">ECHO ARENA</span>
+              <span class="cyber-tag tag-cyan">Echo Arena</span>
+            </div>
+          </div>
+          <div class="cyber-deco-bar"></div>
+        </div>
+
+        <div class="leaderboard-list" id="leaderboard-data"></div>
+      </div>
+    </div>
+
+    <script type="module" src="./script.js"></script>
     <script>
       //{ name: "", points: [] }
       const playersData = [
@@ -122,7 +151,7 @@
         container.innerHTML = htmlContent;
       }
 
-      document.addEventListener("DOMContentLoaded", generateLeaderboard);
+      //document.addEventListener("DOMContentLoaded", generateLeaderboard);
     </script>
   </body>
 </html>

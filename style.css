@@ -299,11 +299,31 @@ body {
   line-height: 1;
 }
 
-.player-info {
+.player-info,
+.team-info {
   flex-grow: 1;
   display: flex;
   align-items: center;
 }
+
+.team-info {
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 300;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+}
+
+.team-info .players-box {
+  border: 1px solid #0f205b;
+  border-radius: 5px;
+}
+
+.team-info .players-box span {
+  margin: 0 5px;
+}
+
 .player-name {
   color: #ffffff;
   font-size: 30px;
@@ -518,4 +538,54 @@ body {
   border: 5px solid white;
   border-radius: 50%;
   filter: drop-shadow(0px 0px 10px white);
+}
+
+header {
+  color: white;
+  z-index: 9999;
+  position: absolute;
+}
+
+.action-button {
+  border-radius: 15px;
+  background-color: #0d0d28;
+  border: 1px solid #0f205b;
+  padding: 10px;
+  color: white;
+  font-family: inherit;
+  font-weight: bold;
+  text-transform: uppercase;
+  transition: 0.1s ease-in-out;
+}
+
+.small-action-button {
+  border-radius: 5px;
+  background-color: #0d0d28;
+  border: 1px solid #0f205b;
+  padding: 5px;
+  color: white;
+  font-family: inherit;
+  font-weight: bold;
+  text-transform: uppercase;
+  transition: 0.1s ease-in-out;
+}
+
+.action-button:hover,
+.small-action-button:hover {
+  background-color: #15153e;
+  cursor: pointer;
+  transition: 0.1s ease-in-out;
+}
+
+.action-button:active,
+.small-action-button:active {
+  background-color: #0d0d28;
+  transition: 0.1s ease-in-out;
+}
+
+.action-button:disabled,
+.small-action-button:disabled {
+  background-color: #28284a;
+  transition: 0.1s ease-in-out;
+  cursor: not-allowed;
 }
