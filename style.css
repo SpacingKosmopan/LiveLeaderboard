@@ -223,7 +223,14 @@ body {
   position: absolute;
   inset: 0;
   z-index: -1;
-  clip-path: polygon(0 0, 90% 0, 100% 30%, 100% 100%, 10% 100%, 0 70%);
+  clip-path: polygon(
+    0 0,
+    calc(100% - 10px) 0,
+    100% 10px,
+    100% 100%,
+    10px 100%,
+    0 calc(100% - 10px)
+  );
 }
 
 .tag-cyan::after {
