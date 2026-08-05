@@ -428,6 +428,20 @@ body {
   text-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
 }
 
+.leaderboard-row.rank-3 {
+  background: #140d04;
+  border-color: rgba(2cd7, 137, 54, 0.25);
+}
+.leaderboard-row.rank-3 .row-indicator {
+  background: #cd7f32;
+  box-shadow: 0 0 10px #cd7f32;
+}
+.leaderboard-row.rank-3 .player-rank,
+.leaderboard-row.rank-3 .score-val {
+  color: #cd7f32;
+  text-shadow: 0 0 6px rgba(205, 127, 50, 0.4);
+}
+
 /* CROWN SPARKLE */
 .crown-sparkle {
   background: #ffffff;

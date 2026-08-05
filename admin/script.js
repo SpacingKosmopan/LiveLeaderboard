@@ -542,6 +542,8 @@ async function getTeamsMap() {
 
 let battlesUnsubscribe = null;
 let currentBattleId = null;
+let currentBattleTeamsId = [];
+
 async function showBattles() {
   document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
   PANELS.battlesPanel.classList.remove("hidden");
@@ -606,8 +608,9 @@ async function showBattles() {
                 .forEach((p) => p.classList.add("hidden"));
 
               currentBattleId = doc.id;
+              currentBattleTeamsId = battleTeams;
 
-              await addTeamsToRecordTable();
+              await addTeamsToRecordTable(battleData.teams);
               renderRecordTableData(teamsMap);
 
               PANELS.battleGamePanel.classList.remove("hidden");
@@ -666,11 +669,17 @@ async function openAddBattlePanel() {
   beginBattleButton.disabled = true;
 
   const teamsRef = collection(db, "teams");
+  const teamsQuery = query(
+    teamsRef,
+    where("tournamentId", "==", currentTournamentId),
+  );
   try {
-    const querySnapshot = await getDocs(teamsRef);
+    const querySnapshot = await getDocs(teamsQuery);
 
     querySnapshot.forEach((doc) => {
       const teamData = doc.data();
+
+      if (teamData.players.length === 0) return; // no empty teams
 
       const teamDiv = document.createElement("div");
       teamDiv.innerHTML = /*html*/ `
@@ -742,7 +751,7 @@ let editingRecords = [];
  * Creates table structure (teams -> rows)
  * @returns
  */
-async function addTeamsToRecordTable() {
+async function addTeamsToRecordTable(teamsIdArray = []) {
   const battleRecordsTable = document.querySelector("#battle-records-table");
   if (!battleRecordsTable) {
     console.error("Battle records table not found");
@@ -771,6 +780,10 @@ async function addTeamsToRecordTable() {
   const teams = await getTeamsMap();
 
   teams.forEach((team, key) => {
+    if (!teamsIdArray.includes(key)) {
+      return;
+    }
+
     teamsBattleTable[key] = {};
 
     const placementRow = document.createElement("tr");
@@ -855,7 +868,7 @@ function showBattleRecordInputs(teams) {
 
   document.querySelector("#record-number-row").innerHTML = "";
 
-  teams.forEach((_, key) => {
+  currentBattleTeamsId.forEach((key) => {
     const rows = [
       teamsBattleTable[key].placementRow,
       teamsBattleTable[key].killsRow,
@@ -911,7 +924,7 @@ function showBattleRecordInputs(teams) {
       });
     });
 
-    teams.forEach((_, teamKey) => {
+    currentBattleTeamsId.forEach((teamKey) => {
       const teamData = battleRecord[teamKey] || {
         placement: null,
         kills: null,
@@ -1026,7 +1039,7 @@ async function addBattleRecord() {
   const battlesAmount = battleData.length;
 
   const newRecord = {};
-  teams.forEach((_, key) => {
+  currentBattleTeamsId.forEach((key) => {
     newRecord[key] = {
       placement: null,
       kills: null,

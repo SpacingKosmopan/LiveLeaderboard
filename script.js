@@ -242,7 +242,8 @@ window.showBattle = async function (battleId) {
         const teamsMap = await getTeamsMap(battleDataRaw.tournamentId);
 
         // Object -> Array
-        const battleData = Object.values(battleDataRawRecords);
+
+        const battleData = Object.values(battleDataRawRecords || {});
 
         const displayData = battleData.reduce((map, battle) => {
           if (battle && battle.data) {
@@ -336,6 +337,7 @@ window.showBattle = async function (battleId) {
               placementPoints,
               penaltyPoints,
               totalSurvivors,
+              teamName: teamData.name,
             };
 
             /*container.insertAdjacentHTML(
@@ -374,8 +376,10 @@ window.showBattle = async function (battleId) {
             rankClass = "rank-1";
 
             crownSparkle = '<span class="cyber-crown"></span>';
-          } else if (rank === 2 || rank === 3) {
+          } else if (rank === 2) {
             rankClass = "rank-2";
+          } else if (rank === 3) {
+            rankClass = "rank-3";
           }
 
           const formattedRank = rank < 10 ? `0${rank}` : rank;
@@ -386,7 +390,7 @@ window.showBattle = async function (battleId) {
               <div class="row-indicator"></div>
               <div class="player-rank">${formattedRank}</div>
               <div class="player-info">
-                <span class="player-name">${getPlayersString(team.players)} ${crownSparkle}</span>
+                <span class="player-name">${team.teamName}: ${getPlayersString(team.players)} ${crownSparkle}</span>
               </div>
               <div class="player-score">
                 <span class="score-val">${formattedPoints}</span>
