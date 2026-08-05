@@ -128,8 +128,11 @@ onAuthStateChanged(auth, (user) => {
     errorMsg.innerText = "";
 
     PANELS.adminPanel.innerHTML = /*html*/ `
-      <div><p style="display: inline-block;">Logged user: <strong>${userName}</strong></p>
-      <button id="logout-btn" class="action-button"><i class="bi bi-door-open"></i> Log out</button></div> <hr />
+      <div>
+        <p style="display: inline-block;">Logged user: <strong>${userName}</strong></p>
+        <button id="see-leaderboard-btn" class="action-button"><i class="bi bi-award"></i> See leaderboard</button>
+        <button id="logout-btn" class="action-button"><i class="bi bi-door-open"></i> Log out</button>
+      </div> <hr />
       <p>Your tournaments</p>
         <table id="tournaments-table">
           <thead>
@@ -147,6 +150,11 @@ onAuthStateChanged(auth, (user) => {
           </tbody>
         </table>
     `;
+    document
+      .querySelector("#see-leaderboard-btn")
+      .addEventListener("click", () => {
+        window.location.href = `../index.html`;
+      });
     document.querySelector("#logout-btn").addEventListener("click", () => {
       signOut(auth);
     });
@@ -156,6 +164,9 @@ onAuthStateChanged(auth, (user) => {
     document
       .querySelector("#mng-battles-btn")
       .addEventListener("click", showBattles);
+    document
+      .querySelector("#change-visibility-btn")
+      .addEventListener("click", changeTournamentVisibility);
     document
       .querySelector("#new-tournament-btn")
       .addEventListener("click", newTournament);
@@ -241,7 +252,7 @@ async function showAllTournaments() {
         }
       },
       (error) => {
-        console.error("Błąd nasłuchiwania turniejów: ", error);
+        console.error("Error tournaments listening: ", error);
       },
     );
   } catch (error) {
@@ -279,29 +290,65 @@ async function newTournament() {
 
 let currentTournamentId;
 
-async function showTournament(id) {
+let unsubscribeTournament = null;
+
+function showTournament(id) {
   currentTournamentId = id;
   document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
   PANELS.tournamentPanel.classList.remove("hidden");
 
+  if (unsubscribeTournament) {
+    unsubscribeTournament();
+  }
+
   try {
-    const tournamentsRef = collection(db, "tournaments");
+    const docRef = doc(db, "tournaments", id);
 
-    // get doc data by id
-    const docSnapshot = await getDoc(doc(db, "tournaments", id));
+    unsubscribeTournament = onSnapshot(
+      docRef,
+      (docSnapshot) => {
+        if (docSnapshot.exists()) {
+          const docData = docSnapshot.data();
 
-    if (docSnapshot.exists()) {
-      const docData = docSnapshot.data();
+          PANELS.tournamentPanel.querySelector("#tournament-name").innerHTML =
+            `${docData.name}`;
 
-      PANELS.tournamentPanel.querySelector("#tournament-name").innerHTML =
-        `${docData.name}`;
-      PANELS.tournamentPanel.querySelector("#tournament-info").innerHTML =
-        `${docData.active ? "Your tournament is active. Click button to deactivate" : "Your tournament is not active. Click button to make it public"}`;
-    } else {
-      alert("Doc not found!");
-    }
+          PANELS.tournamentPanel.querySelector("#tournament-info").innerHTML =
+            `${
+              docData.active
+                ? `<i class="bi bi-info-circle"></i> Your tournament is active and leaderboard is visible for everyone. Click button to deactivate`
+                : `<i class="bi bi-info-circle"></i> Your tournament is not active. Noone can see the leaderboard. Click button to make it public`
+            }`;
+        } else {
+          alert("Doc not found!");
+        }
+      },
+      (error) => {
+        console.error("Stream error: ", error);
+      },
+    );
   } catch (error) {
-    console.error("Couldn't fetch data: ", error);
+    console.error("Couldn't setup real-time listener: ", error);
+  }
+}
+
+async function changeTournamentVisibility() {
+  const tournamentRef = doc(db, "tournaments", currentTournamentId);
+
+  try {
+    const docSnapshot = await getDoc(tournamentRef);
+
+    if (!docSnapshot.exists()) {
+      console.error("Tournament doc not found");
+      return;
+    }
+
+    const docData = docSnapshot.data();
+    await updateDoc(tournamentRef, {
+      active: !docData.active,
+    });
+  } catch (error) {
+    console.error("Database operation failed: ", error);
   }
 }
 
