@@ -117,6 +117,17 @@ addEventListener("DOMContentLoaded", (event) => {
       showAllTournaments();
     }),
   );
+
+  document.querySelector("#mng-teams-btn").addEventListener("click", showTeams);
+  document
+    .querySelector("#mng-battles-btn")
+    .addEventListener("click", showBattles);
+  document
+    .querySelector("#change-visibility-btn")
+    .addEventListener("click", changeTournamentVisibility);
+  document
+    .querySelector("#invite-comanager-btn")
+    .addEventListener("click", inviteComanager);
 });
 
 let loggedUser = null;
@@ -161,6 +172,9 @@ onAuthStateChanged(auth, (user) => {
       .addEventListener("click", () => {
         window.location.href = `../index.html`;
       });
+    document
+      .querySelector("#new-tournament-btn")
+      .addEventListener("click", newTournament);
     document.querySelector("#logout-btn").addEventListener("click", () => {
       signOut(auth);
     });
@@ -170,20 +184,6 @@ onAuthStateChanged(auth, (user) => {
     loggedUser = null;
   }
 });
-
-document.querySelector("#mng-teams-btn")?.addEventListener("click", showTeams);
-document
-  .querySelector("#mng-battles-btn")
-  ?.addEventListener("click", showBattles);
-document
-  .querySelector("#change-visibility-btn")
-  ?.addEventListener("click", changeTournamentVisibility);
-document
-  .querySelector("#invite-comanager-btn")
-  ?.addEventListener("click", inviteComanager);
-document
-  .querySelector("#new-tournament-btn")
-  ?.addEventListener("click", newTournament);
 
 //#endregion
 
@@ -467,13 +467,14 @@ function showTeams() {
         const teamDiv = document.createElement("div");
         teamDiv.className = "team-div";
         teamDiv.innerHTML = /*html*/ `
-          <button title="Delete team" class="delete-team-btn small-action-button" data-teamid="${doc.id}" style="background-color:#500;">- team</button>
+          <button title="Add player to team" class="add-player-btn small-action-button" data-teamid="${doc.id}" style="background-color: #050;">+ player</button>
         `;
 
         teamDiv.insertAdjacentHTML(
           "beforeend",
           /*html*/ `
-          <button title="Add player to team" class="add-player-btn small-action-button" data-teamid="${doc.id}" style="background-color: #050;">+ player</button>`,
+          <button title="Delete team" class="delete-team-btn small-action-button" data-teamid="${doc.id}" style="background-color:#500;">- team</button>
+          `,
         );
 
         teamDiv
@@ -557,6 +558,8 @@ addPlayerToTeamForm.addEventListener("submit", async (e) => {
     alert("Please insert player name");
     return;
   }
+
+  PANELS.addPlayerToTeam.classList.add("hidden");
 
   const playerId = addPlayerToTeamForm["new-player-id"].value.trim();
 
@@ -989,15 +992,21 @@ function renderRecordTableData(teams) {
       (battleSnapshot) => {
         if (battleSnapshot.exists()) {
           battleData = [];
+          window.lastFirebaseRecordsSnapshot = {};
 
           if (battleSnapshot.data().records) {
             const records = battleSnapshot.data().records;
-            battleData = [];
 
             Object.keys(records)
               .sort((a, b) => Number(a) - Number(b))
               .forEach((id) => {
-                battleData.push(records[id].data || {});
+                const actualData = records[id].data || {};
+                battleData.push(actualData);
+
+                const recordIndex = battleData.length - 1;
+                window.lastFirebaseRecordsSnapshot[recordIndex] = JSON.parse(
+                  JSON.stringify(actualData),
+                );
               });
           }
 
@@ -1127,11 +1136,14 @@ function showBattleRecordInputs(teams) {
 function cancelBattleEdit(recordId, teams) {
   editingRecords = editingRecords.filter((id) => id !== recordId);
 
-  if (recordId === battleData.length - 1) {
-    const isNewUnsaved = !window.lastFirebaseRecordsSnapshot?.[recordId];
-    if (isNewUnsaved) {
-      battleData.pop();
-    }
+  const isNewUnsaved = !window.lastFirebaseRecordsSnapshot?.[recordId];
+
+  if (recordId === battleData.length - 1 && isNewUnsaved) {
+    battleData.pop();
+  } else if (!isNewUnsaved) {
+    battleData[recordId] = JSON.parse(
+      JSON.stringify(window.lastFirebaseRecordsSnapshot[recordId]),
+    );
   }
 
   showBattleRecordInputs(teams);
