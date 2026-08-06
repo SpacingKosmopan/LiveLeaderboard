@@ -467,13 +467,14 @@ function showTeams() {
         const teamDiv = document.createElement("div");
         teamDiv.className = "team-div";
         teamDiv.innerHTML = /*html*/ `
-          <button title="Delete team" class="delete-team-btn small-action-button" data-teamid="${doc.id}" style="background-color:#500;">- team</button>
+          <button title="Add player to team" class="add-player-btn small-action-button" data-teamid="${doc.id}" style="background-color: #050;">+ player</button>
         `;
 
         teamDiv.insertAdjacentHTML(
           "beforeend",
           /*html*/ `
-          <button title="Add player to team" class="add-player-btn small-action-button" data-teamid="${doc.id}" style="background-color: #050;">+ player</button>`,
+          <button title="Delete team" class="delete-team-btn small-action-button" data-teamid="${doc.id}" style="background-color:#500;">- team</button>
+          `,
         );
 
         teamDiv
