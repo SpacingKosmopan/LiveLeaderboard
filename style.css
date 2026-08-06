@@ -53,7 +53,7 @@ body {
 /* MAIN PANEL */
 .cyber-panel {
   width: 100%;
-  max-width: 750px;
+  max-width: 1200px;
   background: #04040c;
   border: 2px solid #0b1436;
   border-radius: 12px;
@@ -279,7 +279,14 @@ body {
   padding: 6px 25px;
   position: relative;
   overflow: hidden;
-  clip-path: polygon(0 0, 98% 0, 100% 25%, 100% 100%, 2% 100%, 0 75%);
+  clip-path: polygon(
+    0 0,
+    calc(100% - 20px) 0,
+    100% 20px,
+    100% 100%,
+    20px 100%,
+    0 calc(100% - 20px)
+  );
   transition: all 0.2s ease-in-out;
 }
 .leaderboard-row:hover {

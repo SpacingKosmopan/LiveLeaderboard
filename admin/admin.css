@@ -63,13 +63,13 @@
 
 .action-button:active,
 .small-action-button:active {
-  background-color: #0d0d28;
+  background-color: #111138;
   transition: 0.1s ease-in-out;
 }
 
 .action-button:disabled,
 .small-action-button:disabled {
-  background-color: #28284a;
+  background-color: #070713;
   transition: 0.1s ease-in-out;
   cursor: not-allowed;
 }
@@ -105,6 +105,7 @@
 .players-box {
   border: 1px solid #0f205b;
   border-radius: 5px;
+  display: flex;
 }
 
 .players-box span {
@@ -248,4 +249,69 @@
 .battle-table-record-input:focus {
   outline: none;
   background-color: #09fb;
+}
+
+/* Kontener główny siatki */
+#team-select-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  padding: 16px 0;
+  width: 100%;
+}
+
+.team-card {
+  border: 2px solid #3b516d;
+  border-radius: 8px;
+  padding: 16px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+}
+
+.team-card:hover {
+  border-color: #7094bf;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.team-card.selected {
+  border-color: #3b82f6;
+  background-color: #072b5c39;
+}
+
+.team-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.team-card h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.select-team-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.team-card.selected .player-tag {
+  background-color: #0735725a;
+  color: #ffffff;
+  border-color: #bfdbfe;
+}
+
+#battle-records-table tbody .placement-row td:first-child {
+  max-width: 400px;
 }

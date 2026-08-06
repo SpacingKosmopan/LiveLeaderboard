@@ -17,6 +17,7 @@ import {
   updateDoc, // update
   setDoc,
   arrayUnion,
+  arrayRemove,
   deleteDoc, // delete
   query,
   where,
@@ -24,11 +25,39 @@ import {
   getCountFromServer,
   onSnapshot,
   orderBy,
+  runTransaction,
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 //#endregion
 
 //#region login
+const DB_STREAMS = {
+  active: {},
+
+  stop(streamName) {
+    if (this.active[streamName]) {
+      this.active[streamName](); // Firebase unsubscribe
+      this.active[streamName] = null;
+    }
+  },
+
+  start(name, unsubscribe) {
+    this.stop(name);
+    this.active[name] = unsubscribe;
+  },
+
+  stopAll() {
+    Object.keys(this.active).forEach((streamName) => this.stop(streamName));
+  },
+};
+
+function openPanel(panel) {
+  DB_STREAMS.stopAll();
+
+  document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
+
+  panel.classList.remove("hidden");
+}
 
 const emailInput = document.querySelector("#email-input");
 const passwordInput = document.querySelector("#password-input");
@@ -59,23 +88,6 @@ loginBtn.addEventListener("click", handleLogIn);
 
 /////
 
-const data = {
-  teams: [
-    {
-      players: [{ name: "alpha", inGameId: "XXXXXXX" }],
-      games: [
-        {
-          placeTaken: 1,
-          killsMade: 0,
-          penaltyPoints: 0,
-          playersSurvived: 0,
-        },
-      ],
-      bucksBank: 0,
-    },
-  ],
-};
-
 //#region panels handlers
 
 const adminPanel = document.querySelector("#admin-panel");
@@ -94,21 +106,15 @@ const PANELS = {
 addEventListener("DOMContentLoaded", (event) => {
   document.querySelectorAll(".back-to-tournament-btn").forEach((b) =>
     b.addEventListener("click", () => {
-      document
-        .querySelectorAll(".panel")
-        .forEach((p) => p.classList.add("hidden"));
-
-      PANELS.tournamentPanel.classList.remove("hidden");
+      openPanel(PANELS.tournamentPanel);
+      showTournament(currentTournamentId);
     }),
   );
 
   document.querySelectorAll(".back-to-admin-btn").forEach((b) =>
     b.addEventListener("click", () => {
-      document
-        .querySelectorAll(".panel")
-        .forEach((p) => p.classList.add("hidden"));
-
-      PANELS.adminPanel.classList.remove("hidden");
+      openPanel(PANELS.adminPanel);
+      showAllTournaments();
     }),
   );
 });
@@ -117,7 +123,7 @@ let loggedUser = null;
 
 // login state change
 onAuthStateChanged(auth, (user) => {
-  document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
+  openPanel(PANELS.adminPanel);
 
   if (user) {
     loggedUser = user;
@@ -158,38 +164,35 @@ onAuthStateChanged(auth, (user) => {
     document.querySelector("#logout-btn").addEventListener("click", () => {
       signOut(auth);
     });
-    document
-      .querySelector("#mng-teams-btn")
-      .addEventListener("click", showTeams);
-    document
-      .querySelector("#mng-battles-btn")
-      .addEventListener("click", showBattles);
-    document
-      .querySelector("#change-visibility-btn")
-      .addEventListener("click", changeTournamentVisibility);
-    document
-      .querySelector("#new-tournament-btn")
-      .addEventListener("click", newTournament);
 
     showAllTournaments();
-
-    PANELS.adminPanel.classList.remove("hidden");
   } else {
-    PANELS.loginPanel.classList.remove("hidden");
     loggedUser = null;
   }
 });
+
+document.querySelector("#mng-teams-btn")?.addEventListener("click", showTeams);
+document
+  .querySelector("#mng-battles-btn")
+  ?.addEventListener("click", showBattles);
+document
+  .querySelector("#change-visibility-btn")
+  ?.addEventListener("click", changeTournamentVisibility);
+document
+  .querySelector("#invite-comanager-btn")
+  ?.addEventListener("click", inviteComanager);
+document
+  .querySelector("#new-tournament-btn")
+  ?.addEventListener("click", newTournament);
 
 //#endregion
 
 //#region tournaments
 
-let tournamentsUnsubscribe = null;
-
 async function showAllTournaments() {
-  if (typeof tournamentsUnsubscribe === "function") {
-    tournamentsUnsubscribe();
-    tournamentsUnsubscribe = null;
+  if (!loggedUser) {
+    console.warn("User is not logged in");
+    return;
   }
 
   try {
@@ -199,30 +202,40 @@ async function showAllTournaments() {
       return;
     }
     const tableBody = tournamentsTable.querySelector("tbody");
+    tableBody.innerHTML = "";
 
     const tournamentsRef = collection(db, "tournaments");
     const tournamentQuery = query(tournamentsRef, orderBy("createdAt", "desc"));
 
-    tournamentsUnsubscribe = onSnapshot(
-      tournamentQuery,
-      async (querySnapshot) => {
-        tableBody.innerHTML = "";
+    DB_STREAMS.start(
+      "tournaments",
+      onSnapshot(
+        tournamentQuery,
+        async (querySnapshot) => {
+          tableBody.innerHTML = "";
 
-        // for ... of allows await
-        for (const doc of querySnapshot.docs) {
-          const tournamentData = doc.data();
+          // for ... of allows await
+          for (const doc of querySnapshot.docs) {
+            if (!loggedUser) {
+              tableBody.innerHTML = "";
+              return;
+            }
 
-          const battlesRef = collection(db, "battles");
-          const battlesQuery = query(
-            battlesRef,
-            where("tournamentId", "==", doc.id),
-          );
+            const userName = loggedUser.email.split("@")[0].toLowerCase();
 
-          const countSnapshot = await getCountFromServer(battlesQuery);
-          const battlesCount = countSnapshot.data().count;
+            const tournamentData = doc.data();
 
-          const tRow = document.createElement("tr");
-          tRow.innerHTML = /*html*/ `
+            const battlesRef = collection(db, "battles");
+            const battlesQuery = query(
+              battlesRef,
+              where("tournamentId", "==", doc.id),
+            );
+
+            const countSnapshot = await getCountFromServer(battlesQuery);
+            const battlesCount = countSnapshot.data().count;
+
+            const tRow = document.createElement("tr");
+            tRow.innerHTML = /*html*/ `
             <td>${tournamentData.name || "No name"}</td>
             <td>${tournamentData.authorUsername || "missing name"}</td>
             <td>${tournamentData.createdAt?.toDate()?.toLocaleString("en-GB") || ""}</td>
@@ -230,30 +243,34 @@ async function showAllTournaments() {
             <td>${tournamentData.active ? `<i class="bi bi-check-circle-fill"></i> active` : `<i class="bi bi-x-circle-fill"></i> inactive`}</td>
             <td>
               ${
-                tournamentData.author === loggedUser.uid
-                  ? `owner <button class="edit-tournament-button small-action-button" data-id="${doc.id}">
+                //* owner
+                tournamentData.author === loggedUser?.uid
+                  ? `<span style="background-color: #0b7346; border-radius: 5px; padding: 3px;">owner</span> <button class="edit-tournament-button small-action-button" data-id="${doc.id}">
                 <i class="bi bi-pencil"></i>
               </button>`
-                  : ""
+                  : //* comanager
+                    tournamentData.comanagers.includes(userName)
+                    ? `<span style="background-color: #530873; border-radius: 5px; padding: 3px;">invited</span> <button class="edit-tournament-button small-action-button" data-id="${doc.id}">
+                <i class="bi bi-pencil"></i>`
+                    : //* no permissions
+                      ""
               }
             </td>  
           `;
 
-          const editBtn = tRow.querySelector(".edit-tournament-button");
-          editBtn?.addEventListener("click", function () {
-            if (typeof tournamentsUnsubscribe === "function") {
-              tournamentsUnsubscribe();
-              tournamentsUnsubscribe = null;
-            }
-            showTournament(this.dataset.id);
-          });
+            const editBtn = tRow.querySelector(".edit-tournament-button");
+            editBtn?.addEventListener("click", function () {
+              DB_STREAMS.stop("tournaments");
+              showTournament(this.dataset.id);
+            });
 
-          tableBody.appendChild(tRow);
-        }
-      },
-      (error) => {
-        console.error("Error tournaments listening: ", error);
-      },
+            tableBody.appendChild(tRow);
+          }
+        },
+        (error) => {
+          console.error("Error tournaments listening: ", error);
+        },
+      ),
     );
   } catch (error) {
     console.error("Couldn't get data from database: ", error);
@@ -290,65 +307,88 @@ async function newTournament() {
 
 let currentTournamentId;
 
-let unsubscribeTournament = null;
-
 function showTournament(id) {
   currentTournamentId = id;
-  document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
-  PANELS.tournamentPanel.classList.remove("hidden");
 
-  if (unsubscribeTournament) {
-    unsubscribeTournament();
-  }
+  openPanel(PANELS.tournamentPanel);
 
   try {
     const docRef = doc(db, "tournaments", id);
 
-    unsubscribeTournament = onSnapshot(
-      docRef,
-      (docSnapshot) => {
-        if (docSnapshot.exists()) {
-          const docData = docSnapshot.data();
+    DB_STREAMS.start(
+      "tournament",
+      onSnapshot(
+        docRef,
+        (docSnapshot) => {
+          if (docSnapshot.exists()) {
+            const docData = docSnapshot.data();
 
-          PANELS.tournamentPanel.querySelector("#tournament-name").innerHTML =
-            `${docData.name}`;
+            PANELS.tournamentPanel.querySelector("#tournament-name").innerHTML =
+              `${docData.name}`;
 
-          PANELS.tournamentPanel.querySelector("#tournament-info").innerHTML =
-            `${
-              docData.active
-                ? `<i class="bi bi-info-circle"></i> Your tournament is active and leaderboard is visible for everyone. Click button to deactivate`
-                : `<i class="bi bi-info-circle"></i> Your tournament is not active. Noone can see the leaderboard. Click button to make it public`
-            }`;
-        } else {
-          alert("Doc not found!");
-        }
-      },
-      (error) => {
-        console.error("Stream error: ", error);
-      },
+            PANELS.tournamentPanel.querySelector("#tournament-info").innerHTML =
+              `${
+                docData.active
+                  ? `<i class="bi bi-info-circle"></i> Your tournament is active and leaderboard is visible for everyone. Click button to deactivate`
+                  : `<i class="bi bi-info-circle"></i> Your tournament is not active. Noone can see the leaderboard. Click button to make it public`
+              }`;
+          } else {
+            alert("Doc not found!");
+          }
+        },
+        (error) => {
+          console.error("Stream error: ", error);
+        },
+      ),
     );
   } catch (error) {
     console.error("Couldn't setup real-time listener: ", error);
   }
 }
 
-async function changeTournamentVisibility() {
+async function changeTournamentVisibility(event) {
+  const button = event.currentTarget;
+  button.disabled = true;
+
   const tournamentRef = doc(db, "tournaments", currentTournamentId);
 
   try {
-    const docSnapshot = await getDoc(tournamentRef);
+    await runTransaction(db, async (transaction) => {
+      const sfDoc = await transaction.get(tournamentRef);
+      if (!sfDoc.exists()) {
+        throw "Tournament doc not found";
+      }
 
-    if (!docSnapshot.exists()) {
-      console.error("Tournament doc not found");
-      return;
-    }
-
-    const docData = docSnapshot.data();
-    await updateDoc(tournamentRef, {
-      active: !docData.active,
+      const currentActive = sfDoc.data().active;
+      transaction.update(tournamentRef, { active: !currentActive });
     });
   } catch (error) {
     console.error("Database operation failed: ", error);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function inviteComanager() {
+  const name = prompt("Enter username:").trim().toLowerCase();
+
+  if (name === null) return;
+
+  if (name === "") {
+    alert("Invalid username");
+    return;
+  }
+
+  const teamDocRef = doc(db, "tournaments", currentTournamentId);
+
+  try {
+    await updateDoc(teamDocRef, {
+      comanagers: arrayUnion(name),
+    });
+
+    alert("Co-manager successfuly added");
+  } catch (error) {
+    console.error("Couldn't add player to team: ", error);
   }
 }
 
@@ -359,6 +399,12 @@ async function changeTournamentVisibility() {
 async function createTeam() {
   try {
     const name = prompt("Enter team name:");
+
+    if (name === null) {
+      // canceled
+      return;
+    }
+
     if (!name || name === "") {
       alert("Please enter name");
       return;
@@ -385,13 +431,14 @@ async function createTeam() {
 }
 
 async function deleteTeam(teamId) {
+  const answer = confirm("Are you sure you want to delete this team?");
+  if (!answer) return;
+
   // SQL: SELECT
   const docRef = doc(db, "teams", teamId);
 
   try {
     await deleteDoc(docRef);
-
-    await showTeams();
   } catch (error) {
     console.error("Couldn't delete data from database: ", error);
   }
@@ -399,72 +446,87 @@ async function deleteTeam(teamId) {
 
 document.querySelector("#add-team-btn").addEventListener("click", createTeam);
 
-async function showTeams() {
-  document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
-  PANELS.teamsPanel.classList.remove("hidden");
+function showTeams() {
+  openPanel(PANELS.teamsPanel);
 
-  try {
-    const teamsListDiv = document.querySelector("#teams-list");
-    teamsListDiv.innerHTML = ``;
+  const teamsListDiv = document.querySelector("#teams-list");
+  teamsListDiv.innerHTML = ``;
 
-    // SQL: SELECT TABLE teams
-    const teamsRef = collection(db, "teams");
+  const teamsRef = collection(db, "teams");
+  const teamQuery = query(
+    teamsRef,
+    where("tournamentId", "==", currentTournamentId),
+  );
 
-    const teamQuery = query(
-      teamsRef,
-      where("tournamentId", "==", currentTournamentId),
-    );
+  const unsubscribe = onSnapshot(
+    teamQuery,
+    (querySnapshot) => {
+      teamsListDiv.innerHTML = ``;
 
-    // SQL: SELECT * FROM teams
-    const querySnapshot = await getDocs(teamQuery);
+      querySnapshot.forEach((doc) => {
+        const teamDiv = document.createElement("div");
+        teamDiv.className = "team-div";
+        teamDiv.innerHTML = /*html*/ `
+          <button title="Delete team" class="delete-team-btn small-action-button" data-teamid="${doc.id}" style="background-color:#500;">- team</button>
+        `;
 
-    querySnapshot.forEach((doc) => {
-      const teamDiv = document.createElement("div");
-      teamDiv.className = "team-div";
-      teamDiv.innerHTML = /*html*/ `
-        <button title="Delete team" class="delete-team-btn small-action-button" data-teamid="${doc.id}" style="background-color:#500;">- team</button>
-      `;
-      teamDiv
-        .querySelector(".delete-team-btn")
-        .addEventListener("click", function () {
-          const answer = confirm("Are you sure?");
-          if (answer) deleteTeam(this.dataset.teamid);
-        });
+        teamDiv.insertAdjacentHTML(
+          "beforeend",
+          /*html*/ `
+          <button title="Add player to team" class="add-player-btn small-action-button" data-teamid="${doc.id}" style="background-color: #050;">+ player</button>`,
+        );
 
-      const teamData = doc.data();
+        teamDiv
+          .querySelector(".add-player-btn")
+          .addEventListener("click", function () {
+            addPlayerToTeam(this.dataset.teamid);
+          });
 
-      const playersBox = document.createElement("p");
-      playersBox.className = "players-box";
-      playersBox.innerHTML = /*html*/ `
-        <button title="Add player to team" class="add-player-btn small-action-button" data-teamid="${doc.id}" style="background-color: #050;">+ player</button>`;
-      playersBox
-        .querySelector(".add-player-btn")
-        .addEventListener("click", function () {
-          addPlayerToTeam(this.dataset.teamid);
-        });
+        teamDiv
+          .querySelector(".delete-team-btn")
+          .addEventListener("click", function () {
+            deleteTeam(this.dataset.teamid);
+          });
 
-      playersBox.insertAdjacentHTML(
-        "beforeend",
-        /*html*/ `
-          <span style="font-size: 1.4rem; font-weight: bold;">${teamData.name}</span>
-        `,
-      );
+        const teamData = doc.data();
 
-      teamData?.players.forEach((player) => {
+        const playersBox = document.createElement("p");
+        playersBox.className = "players-box";
+
         playersBox.insertAdjacentHTML(
           "beforeend",
           /*html*/ `
-          <span title="${player.inGameId || "no in-game id"}">${player.name || "player"}</span>
-        `,
+            <span style="font-size: 1.4rem; font-weight: bold;">${teamData.name}</span>
+          `,
         );
-      });
 
-      teamDiv.appendChild(playersBox);
-      teamsListDiv.appendChild(teamDiv);
-    });
-  } catch (error) {
-    console.error("Couldn't get data from database: ", error);
-  }
+        const players = teamData.players || [];
+        players.forEach((player, index) => {
+          playersBox.insertAdjacentHTML(
+            "beforeend",
+            /*html*/ `
+            <span 
+              title="${player.inGameId || "no in-game id"}" 
+              data-teamid="${doc.id}" 
+              data-playernumber="${index}"
+              ondblclick="removePlayerFromTeam(this)"
+            >
+              ${player.name || "player"}
+            </span>
+          `,
+          );
+        });
+
+        teamDiv.appendChild(playersBox);
+        teamsListDiv.appendChild(teamDiv);
+      });
+    },
+    (error) => {
+      console.error("Firestore error: ", error);
+    },
+  );
+
+  DB_STREAMS.start("teams", unsubscribe);
 }
 
 async function addPlayerToTeam(teamId) {
@@ -487,6 +549,10 @@ addPlayerToTeamForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
   const playerName = addPlayerToTeamForm["new-player-name"].value.trim();
+  if (playerName === null) {
+    return;
+  }
+
   if (playerName === "") {
     alert("Please insert player name");
     return;
@@ -509,12 +575,62 @@ addPlayerToTeamForm.addEventListener("submit", async (e) => {
       // add element to array
       players: arrayUnion(newPlayer),
     });
-
-    await showTeams();
   } catch (error) {
     console.error("Couldn't add player to team: ", error);
   }
 });
+
+window.removePlayerFromTeam = async function (source) {
+  const userConfirmed = confirm(
+    "Are you sure you want to remove player from team?",
+  );
+
+  if (!userConfirmed) {
+    return;
+  }
+
+  const teamId = source.dataset.teamid;
+  const playerIndex = parseInt(source.dataset.playernumber, 10);
+
+  if (!teamId || isNaN(playerIndex)) {
+    console.error("Missing teamId or valid player index");
+    return;
+  }
+
+  const teamDocRef = doc(db, "teams", teamId);
+
+  try {
+    const teamSnapshot = await getDoc(teamDocRef);
+
+    if (!teamSnapshot.exists()) {
+      console.error("Team not found");
+      return;
+    }
+
+    const teamData = teamSnapshot.data();
+    const playersArray = teamData.players || [];
+
+    if (playersArray.length <= 1) {
+      alert("Cannot delete player. Team must have at least one player.");
+      return;
+    }
+
+    const playerToRemove = playersArray[playerIndex];
+    if (!playerToRemove) {
+      console.error("Player not found at index: ", playerIndex);
+      return;
+    }
+
+    await updateDoc(teamDocRef, {
+      players: arrayRemove(playerToRemove),
+    });
+
+    await showTeams();
+    console.log("Player removed successfully");
+  } catch (error) {
+    console.error("Couldn't remove player from team: ", error);
+  }
+};
 
 //#endregion
 
@@ -540,18 +656,11 @@ async function getTeamsMap() {
   }
 }
 
-let battlesUnsubscribe = null;
 let currentBattleId = null;
 let currentBattleTeamsId = [];
 
 async function showBattles() {
-  document.querySelectorAll(".panel").forEach((p) => p.classList.add("hidden"));
-  PANELS.battlesPanel.classList.remove("hidden");
-
-  if (typeof battlesUnsubscribe === "function") {
-    battlesUnsubscribe();
-    battlesUnsubscribe = null;
-  }
+  openPanel(PANELS.battlesPanel);
 
   try {
     const teamsMap = await getTeamsMap();
@@ -566,66 +675,70 @@ async function showBattles() {
     );
 
     // Zamiast getDocs tworzymy subskrypcję czasu rzeczywistego
-    battlesUnsubscribe = onSnapshot(
-      battlesQuery,
-      (querySnapshotBattles) => {
-        battlesListDiv.innerHTML = ``;
+    DB_STREAMS.start(
+      "battles",
+      onSnapshot(
+        battlesQuery,
+        (querySnapshotBattles) => {
+          battlesListDiv.innerHTML = ``;
 
-        querySnapshotBattles.forEach((doc) => {
-          const battleData = doc.data();
-          const battleTeams = battleData?.teams || [];
+          querySnapshotBattles.forEach((doc) => {
+            const battleData = doc.data();
+            const battleTeams = battleData?.teams || [];
 
-          if (battleTeams.length === 0) return;
+            if (battleTeams.length === 0) return;
 
-          const battleDiv = document.createElement("div");
-          battleDiv.className = "battle-div";
+            const battleDiv = document.createElement("div");
+            battleDiv.className = "battle-div";
 
-          const teamStrings = battleTeams.map((teamId) => {
-            const teamData = teamsMap.get(teamId);
-            return getPlayersString(teamData?.players || ["error"]);
-          });
-
-          battleDiv.insertAdjacentHTML(
-            "beforeend",
-            teamStrings.join("&nbsp;vs&nbsp;"),
-          );
-
-          battleDiv.insertAdjacentHTML(
-            "beforeend",
-            `<button class="small-action-button go-to-battle-btn">${battleData?.closed ? "🔎" : `<i class="bi bi-pencil"></i>`}</button>`,
-          );
-
-          battleDiv
-            .querySelector(".go-to-battle-btn")
-            ?.addEventListener("click", async () => {
-              if (typeof battlesUnsubscribe === "function") {
-                battlesUnsubscribe();
-                battlesUnsubscribe = null;
-              }
-
-              document
-                .querySelectorAll(".panel")
-                .forEach((p) => p.classList.add("hidden"));
-
-              currentBattleId = doc.id;
-              currentBattleTeamsId = battleTeams;
-
-              await addTeamsToRecordTable(battleData.teams);
-              renderRecordTableData(teamsMap);
-
-              PANELS.battleGamePanel.classList.remove("hidden");
+            const teamStrings = battleTeams.map((teamId) => {
+              const teamData = teamsMap.get(teamId);
+              return getPlayersString(teamData?.players || ["error"]);
             });
 
-          battlesListDiv.appendChild(battleDiv);
-        });
-      },
-      (error) => {
-        console.error("Battles listening error: ", error);
-      },
-    );
+            battleDiv.insertAdjacentHTML(
+              "beforeend",
+              teamStrings.join("&nbsp;vs&nbsp;"),
+            );
 
-    // Możesz zwrócić unsubscribe, aby zamknąć połączenie po opuszczeniu tego panelu
-    // return unsubscribe;
+            battleDiv.insertAdjacentHTML(
+              "beforeend",
+              /*html*/
+              `<button class="small-action-button go-to-battle-btn" style="background-color: #0bb54f;">${battleData?.closed ? "🔎" : `<i class="bi bi-pencil"></i>`}</button>
+              <button class="small-action-button remove-battle-btn" style="background-color: #b50b3b;"><i class="bi bi-trash"></i></button>
+              `,
+            );
+
+            battleDiv
+              .querySelector(".go-to-battle-btn")
+              ?.addEventListener("click", async () => {
+                document
+                  .querySelectorAll(".panel")
+                  .forEach((p) => p.classList.add("hidden"));
+
+                currentBattleId = doc.id;
+                currentBattleTeamsId = battleTeams;
+
+                await addTeamsToRecordTable(battleData.teams);
+                renderRecordTableData(teamsMap);
+
+                PANELS.battleGamePanel.classList.remove("hidden");
+              });
+
+            battleDiv
+              .querySelector(".remove-battle-btn")
+              ?.addEventListener("click", () => {
+                deleteBattle(doc.id);
+              });
+
+            battlesListDiv.appendChild(battleDiv);
+          });
+        },
+        (error) => {
+          console.error("Battles listening error: ", error);
+        },
+      ),
+    );
   } catch (error) {
     console.error("Couldn't get data from database: ", error);
   }
@@ -678,30 +791,44 @@ async function openAddBattlePanel() {
 
     querySnapshot.forEach((doc) => {
       const teamData = doc.data();
-
-      if (teamData.players.length === 0) return; // no empty teams
+      if (teamData.players.length === 0) return;
 
       const teamDiv = document.createElement("div");
+
+      teamDiv.className = "team-card";
+
       teamDiv.innerHTML = /*html*/ `
-          <input type="checkbox" class="select-team-checkbox small-action-button" data-teamid="${doc.id}" />
-          <p class="players-box"></p>
-        `;
+      <div class="team-card-header">
+        <h3>${teamData.name}</h3>
+        <input type="checkbox" class="select-team-checkbox small-action-button" data-teamid="${doc.id}" />
+      </div>
+      <div class="players-box"></div>
+    `;
 
-      teamDiv
-        .querySelector(".select-team-checkbox")
-        .addEventListener("change", function (e) {
-          if (e.target.checked) {
-            if (selectedTeams.find((teamId) => teamId === this.dataset.teamid))
-              return;
+      const checkbox = teamDiv.querySelector(".select-team-checkbox");
+
+      teamDiv.addEventListener("click", function (e) {
+        if (e.target !== checkbox) {
+          checkbox.checked = !checkbox.checked;
+          checkbox.dispatchEvent(new Event("change"));
+        }
+      });
+
+      checkbox.addEventListener("change", function (e) {
+        if (this.checked) {
+          if (!selectedTeams.includes(this.dataset.teamid)) {
             selectedTeams.push(this.dataset.teamid);
-          } else {
-            selectedTeams = selectedTeams.filter(
-              (teamId) => teamId !== this.dataset.teamid,
-            );
           }
+          teamDiv.classList.add("selected");
+        } else {
+          selectedTeams = selectedTeams.filter(
+            (teamId) => teamId !== this.dataset.teamid,
+          );
+          teamDiv.classList.remove("selected");
+        }
 
-          beginBattleButton.disabled = selectedTeams.length < 2;
-        });
+        beginBattleButton.disabled = selectedTeams.length < 2;
+      });
 
       const playersBox = teamDiv.querySelector(".players-box");
 
@@ -709,8 +836,10 @@ async function openAddBattlePanel() {
         playersBox.insertAdjacentHTML(
           "beforeend",
           /*html*/ `
-              <span title="${player.inGameId || "no in-game id"}">${player.name || "player"}</span>
-            `,
+          <span class="player-tag" title="${player.inGameId || "no in-game id"}">
+            ${player.name || "player"}
+          </span>
+        `,
         );
       });
 
@@ -736,6 +865,28 @@ async function createBattle(teams) {
     const docRef = await addDoc(battlesRef, newBattleData);
   } catch (error) {
     console.error("Couldn't insert data to database: ", error);
+  }
+}
+
+async function deleteBattle(battleId) {
+  if (!battleId) {
+    console.error("Missing battleId");
+    return;
+  }
+
+  const userConfirmed = confirm("Are you sure you want to delete this battle?");
+  if (!userConfirmed) {
+    return;
+  }
+
+  try {
+    const battleDocRef = doc(db, "battles", battleId);
+
+    await deleteDoc(battleDocRef);
+
+    console.log("Battle deleted successfully");
+  } catch (error) {
+    console.error("Couldn't delete battle from database: ", error);
   }
 }
 
@@ -788,6 +939,7 @@ async function addTeamsToRecordTable(teamsIdArray = []) {
 
     const placementRow = document.createElement("tr");
     placementRow.id = `team-${key}-placement`;
+    placementRow.classList.add("placement-row");
     placementRow.innerHTML = /*html*/ `
       <td rowspan="4">Team ${team.name}
         ${getPlayersString(team.players)}
@@ -824,42 +976,43 @@ async function addTeamsToRecordTable(teamsIdArray = []) {
       }
     });
 
-  window.currentBattleUnsubscribe = renderRecordTableData(teams);
+  renderRecordTableData(teams);
 }
 
 function renderRecordTableData(teams) {
   const battleRef = doc(db, "battles", currentBattleId);
 
-  const unsubscribe = onSnapshot(
-    battleRef,
-    (battleSnapshot) => {
-      if (battleSnapshot.exists()) {
-        battleData = [];
-
-        if (battleSnapshot.data().records) {
-          const records = battleSnapshot.data().records;
+  DB_STREAMS.start(
+    "battle",
+    onSnapshot(
+      battleRef,
+      (battleSnapshot) => {
+        if (battleSnapshot.exists()) {
           battleData = [];
 
-          Object.keys(records)
-            .sort((a, b) => Number(a) - Number(b))
-            .forEach((id) => {
-              battleData.push(records[id].data || {});
-            });
+          if (battleSnapshot.data().records) {
+            const records = battleSnapshot.data().records;
+            battleData = [];
+
+            Object.keys(records)
+              .sort((a, b) => Number(a) - Number(b))
+              .forEach((id) => {
+                battleData.push(records[id].data || {});
+              });
+          }
+
+          showBattleRecordInputs(teams);
+
+          console.log("Updated data:", battleData);
+        } else {
+          console.log("Document not found");
         }
-
-        showBattleRecordInputs(teams);
-
-        console.log("Updated data:", battleData);
-      } else {
-        console.log("Document not found");
-      }
-    },
-    (error) => {
-      console.error("Listening error: ", error);
-    },
+      },
+      (error) => {
+        console.error("Listening error: ", error);
+      },
+    ),
   );
-
-  return unsubscribe;
 }
 
 function showBattleRecordInputs(teams) {
@@ -984,6 +1137,13 @@ function cancelBattleEdit(recordId, teams) {
   showBattleRecordInputs(teams);
 }
 
+const INPUT_VALUE_RANGES = {
+  placement: { min: 1, max: 12 },
+  kills: { min: 0, max: 12 },
+  survivors: { min: 0, max: 5 },
+  penalty: { min: 0, max: 9999 },
+};
+
 /**
  * Saves input data to local battleData variable
  * @param {*} input
@@ -1019,6 +1179,15 @@ window.handleInput = function (input) {
   const parentTD = input.parentElement;
   const teamId = parentTD.dataset.teamid;
   const recordId = parseInt(parentTD.dataset.recordid, 10);
+
+  if (
+    parsedValue < INPUT_VALUE_RANGES[category].min ||
+    parsedValue > INPUT_VALUE_RANGES[category].max
+  ) {
+    input.value = "";
+    alert("Incorrect value");
+    return;
+  }
 
   if (battleData[recordId]?.[teamId]) {
     battleData[recordId][teamId][category] = parsedValue;
@@ -1057,6 +1226,8 @@ async function addBattleRecord() {
 
 async function saveBattleData(recordId, teams) {
   const battleRef = doc(db, "battles", currentBattleId);
+
+  console.log(battleData[recordId]);
 
   const data = {
     [`records.${recordId}`]: {
