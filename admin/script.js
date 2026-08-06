@@ -88,23 +88,6 @@ loginBtn.addEventListener("click", handleLogIn);
 
 /////
 
-const data = {
-  teams: [
-    {
-      players: [{ name: "alpha", inGameId: "XXXXXXX" }],
-      games: [
-        {
-          placeTaken: 1,
-          killsMade: 0,
-          penaltyPoints: 0,
-          playersSurvived: 0,
-        },
-      ],
-      bucksBank: 0,
-    },
-  ],
-};
-
 //#region panels handlers
 
 const adminPanel = document.querySelector("#admin-panel");
@@ -181,24 +164,26 @@ onAuthStateChanged(auth, (user) => {
     document.querySelector("#logout-btn").addEventListener("click", () => {
       signOut(auth);
     });
-    document
-      .querySelector("#mng-teams-btn")
-      .addEventListener("click", showTeams);
-    document
-      .querySelector("#mng-battles-btn")
-      .addEventListener("click", showBattles);
-    document
-      .querySelector("#change-visibility-btn")
-      .addEventListener("click", changeTournamentVisibility);
-    document
-      .querySelector("#new-tournament-btn")
-      .addEventListener("click", newTournament);
 
     showAllTournaments();
   } else {
     loggedUser = null;
   }
 });
+
+document.querySelector("#mng-teams-btn")?.addEventListener("click", showTeams);
+document
+  .querySelector("#mng-battles-btn")
+  ?.addEventListener("click", showBattles);
+document
+  .querySelector("#change-visibility-btn")
+  ?.addEventListener("click", changeTournamentVisibility);
+document
+  .querySelector("#invite-comanager-btn")
+  ?.addEventListener("click", inviteComanager);
+document
+  .querySelector("#new-tournament-btn")
+  ?.addEventListener("click", newTournament);
 
 //#endregion
 
@@ -236,6 +221,8 @@ async function showAllTournaments() {
               return;
             }
 
+            const userName = loggedUser.email.split("@")[0].toLowerCase();
+
             const tournamentData = doc.data();
 
             const battlesRef = collection(db, "battles");
@@ -256,11 +243,17 @@ async function showAllTournaments() {
             <td>${tournamentData.active ? `<i class="bi bi-check-circle-fill"></i> active` : `<i class="bi bi-x-circle-fill"></i> inactive`}</td>
             <td>
               ${
+                //* owner
                 tournamentData.author === loggedUser?.uid
-                  ? `owner <button class="edit-tournament-button small-action-button" data-id="${doc.id}">
+                  ? `<span style="background-color: #0b7346; border-radius: 5px; padding: 3px;">owner</span> <button class="edit-tournament-button small-action-button" data-id="${doc.id}">
                 <i class="bi bi-pencil"></i>
               </button>`
-                  : ""
+                  : //* comanager
+                    tournamentData.comanagers.includes(userName)
+                    ? `<span style="background-color: #530873; border-radius: 5px; padding: 3px;">invited</span> <button class="edit-tournament-button small-action-button" data-id="${doc.id}">
+                <i class="bi bi-pencil"></i>`
+                    : //* no permissions
+                      ""
               }
             </td>  
           `;
@@ -373,6 +366,29 @@ async function changeTournamentVisibility(event) {
     console.error("Database operation failed: ", error);
   } finally {
     button.disabled = false;
+  }
+}
+
+async function inviteComanager() {
+  const name = prompt("Enter username:").trim().toLowerCase();
+
+  if (name === null) return;
+
+  if (name === "") {
+    alert("Invalid username");
+    return;
+  }
+
+  const teamDocRef = doc(db, "tournaments", currentTournamentId);
+
+  try {
+    await updateDoc(teamDocRef, {
+      comanagers: arrayUnion(name),
+    });
+
+    alert("Co-manager successfuly added");
+  } catch (error) {
+    console.error("Couldn't add player to team: ", error);
   }
 }
 
@@ -533,6 +549,10 @@ addPlayerToTeamForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
   const playerName = addPlayerToTeamForm["new-player-name"].value.trim();
+  if (playerName === null) {
+    return;
+  }
+
   if (playerName === "") {
     alert("Please insert player name");
     return;
