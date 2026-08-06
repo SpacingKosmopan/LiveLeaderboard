@@ -168,6 +168,10 @@
   cursor: pointer;
 }
 
+#tournaments-table {
+  width: 100%;
+}
+
 #tournaments-table * {
   border: none;
 }
