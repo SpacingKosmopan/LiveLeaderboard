@@ -152,6 +152,8 @@ function getPlayersString(playersArray = []) {
   return string;
 }
 
+let currentTournamentData;
+
 window.showTournamentBattles = async function (tournamentId) {
   DB_STREAMS.stopAll();
 
@@ -161,6 +163,7 @@ window.showTournamentBattles = async function (tournamentId) {
     const tournamentRef = doc(db, "tournaments", tournamentId);
     const snapshot = await getDoc(tournamentRef);
     const tournamentData = snapshot.data();
+    currentTournamentData = { name: tournamentData.name };
 
     const themeLink = document.getElementById("style-preset");
     if (!["echoarena"].includes(tournamentData?.preset)) {
@@ -184,7 +187,7 @@ window.showTournamentBattles = async function (tournamentId) {
         }
         container.innerHTML = "";
         document.querySelector("#container-name").innerHTML =
-          `TOURNAMENT BATTLES`;
+          `${tournamentData.name} BATTLES`;
 
         querySnapshot.forEach((doc) => {
           const battleData = doc.data();
@@ -194,14 +197,13 @@ window.showTournamentBattles = async function (tournamentId) {
           const teamStrings = battleTeams.map((teamId) => {
             const teamData = teamsMap.get(teamId);
             return {
-              stringsArray: getPlayersString(teamData?.players || ["error"]),
               teamName: teamData.name,
             };
           });
 
-          let teamsString = "";
+          let teamsString = "|&nbsp;";
           teamStrings.forEach((teamString) => {
-            teamsString += `<p><strong>${teamString.teamName}</strong></p> ${teamString.stringsArray} &nbsp;`;
+            teamsString += `<p><strong>${teamString.teamName}</strong></p>&nbsp;|&nbsp;`;
           });
 
           container.insertAdjacentHTML(
@@ -210,9 +212,16 @@ window.showTournamentBattles = async function (tournamentId) {
             <div class="leaderboard-row rankClass">
               <div class="row-indicator"></div>
 
-               <div class="team-info">${teamsString}</div>
+              <div class="team-info">Participating teams: &nbsp; ${teamsString}</div>
               
-              <div class="player-score">
+              <div 
+                class="player-score"
+                style="
+                  position: sticky;
+                  right: 0;
+                  margin-left: auto;
+                  z-index: 10;  
+                ">
                 <button class="small-action-button" onclick="showBattle('${doc.id}')"><i class="bi bi-arrow-right"></i></button>
               </div>
             </div>`,
@@ -243,7 +252,7 @@ window.showBattle = async function (battleId) {
         }
         container.innerHTML = "";
         document.querySelector("#container-name").innerHTML =
-          `BATTLE LEADERBOARD`;
+          `${currentTournamentData.name || "BATTLE"} LEADERBOARD`;
 
         const battleDataRaw = querySnapshot.data();
         const battleDataRawRecords = battleDataRaw.records;

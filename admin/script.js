@@ -680,7 +680,6 @@ async function showBattles() {
       where("tournamentId", "==", currentTournamentId),
     );
 
-    // Zamiast getDocs tworzymy subskrypcję czasu rzeczywistego
     DB_STREAMS.start(
       "battles",
       onSnapshot(
@@ -698,9 +697,13 @@ async function showBattles() {
             battleDiv.className = "battle-div";
 
             const teamStrings = battleTeams.map((teamId) => {
-              const teamData = teamsMap.get(teamId);
-              return getPlayersString(teamData?.players || ["error"]);
+              return teamsMap.get(teamId).name || "error";
             });
+
+            battleDiv.insertAdjacentHTML(
+              "beforeend",
+              "Participating teams: &nbsp;",
+            );
 
             battleDiv.insertAdjacentHTML(
               "beforeend",
@@ -710,8 +713,14 @@ async function showBattles() {
             battleDiv.insertAdjacentHTML(
               "beforeend",
               /*html*/
-              `<button class="small-action-button go-to-battle-btn" style="background-color: #0bb54f;">${battleData?.closed ? "🔎" : `<i class="bi bi-pencil"></i>`}</button>
-              <button class="small-action-button remove-battle-btn" style="background-color: #b50b3b;"><i class="bi bi-trash"></i></button>
+              `<div 
+                style="
+                  position: sticky;
+                  right: 0;
+                  margin-left: auto;
+                  z-index: 10;  
+                "><button class="small-action-button go-to-battle-btn" style="background-color: #0bb54f;">${battleData?.closed ? "🔎" : `<i class="bi bi-pencil"></i>`}</button>
+              <button class="small-action-button remove-battle-btn" style="background-color: #b50b3b;"><i class="bi bi-trash"></i></button></div>
               `,
             );
 
@@ -1293,8 +1302,8 @@ window.handlePresetChange = async function (newPresetName) {
   }
 };
 
-window.closePresetsPanel=function () {
+window.closePresetsPanel = function () {
   DB_STREAMS.stop("tournamentPreset");
   PANELS.presetsPanel.classList.add("hidden");
-}
+};
 //#endregion
