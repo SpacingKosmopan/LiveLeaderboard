@@ -101,6 +101,7 @@ const PANELS = {
 
   addPlayerToTeam: document.querySelector("#new-player-form-container"),
   createBattle: document.querySelector("#new-battle-form-container"),
+  presetsPanel: document.querySelector("#style-presets-container"),
 };
 
 addEventListener("DOMContentLoaded", (event) => {
@@ -128,6 +129,9 @@ addEventListener("DOMContentLoaded", (event) => {
   document
     .querySelector("#invite-comanager-btn")
     .addEventListener("click", inviteComanager);
+  document
+    .querySelector("#manage-presets-btn")
+    .addEventListener("click", showPresetsPanel);
 });
 
 let loggedUser = null;
@@ -249,7 +253,7 @@ async function showAllTournaments() {
                 <i class="bi bi-pencil"></i>
               </button>`
                   : //* comanager
-                    tournamentData.comanagers.includes(userName)
+                    tournamentData.comanagers?.includes(userName)
                     ? `<span style="background-color: #530873; border-radius: 5px; padding: 3px;">invited</span> <button class="edit-tournament-button small-action-button" data-id="${doc.id}">
                 <i class="bi bi-pencil"></i>`
                     : //* no permissions
@@ -629,7 +633,6 @@ window.removePlayerFromTeam = async function (source) {
     });
 
     await showTeams();
-    console.log("Player removed successfully");
   } catch (error) {
     console.error("Couldn't remove player from team: ", error);
   }
@@ -886,8 +889,6 @@ async function deleteBattle(battleId) {
     const battleDocRef = doc(db, "battles", battleId);
 
     await deleteDoc(battleDocRef);
-
-    console.log("Battle deleted successfully");
   } catch (error) {
     console.error("Couldn't delete battle from database: ", error);
   }
@@ -1011,8 +1012,6 @@ function renderRecordTableData(teams) {
           }
 
           showBattleRecordInputs(teams);
-
-          console.log("Updated data:", battleData);
         } else {
           console.log("Document not found");
         }
@@ -1239,8 +1238,6 @@ async function addBattleRecord() {
 async function saveBattleData(recordId, teams) {
   const battleRef = doc(db, "battles", currentBattleId);
 
-  console.log(battleData[recordId]);
-
   const data = {
     [`records.${recordId}`]: {
       lastSaved: new Date(),
@@ -1255,11 +1252,49 @@ async function saveBattleData(recordId, teams) {
     editingRecords = editingRecords.filter((id) => id !== recordId);
 
     showBattleRecordInputs(teams);
-
-    console.log("Saved successfully");
   } catch (error) {
     console.error("Couldn't update data in database: ", error);
   }
 }
 
+//#endregion
+
+//#region preset
+function showPresetsPanel() {
+  const tournamentRef = doc(db, "tournaments", currentTournamentId);
+
+  DB_STREAMS.start(
+    "tournamentPreset",
+    onSnapshot(tournamentRef, (tournamentSnapshot) => {
+      if (tournamentSnapshot.exists()) {
+        PANELS.presetsPanel
+          .querySelectorAll(".preset-tile")
+          .forEach((tile) => tile.classList.remove("active"));
+
+        const currentPreset = tournamentSnapshot.data().preset || "cyberglow";
+        const activeTile = PANELS.presetsPanel.querySelector(
+          `#${currentPreset}-preset-tile`,
+        );
+        activeTile?.classList.add("active");
+      }
+    }),
+  );
+
+  PANELS.presetsPanel.classList.remove("hidden");
+}
+
+window.handlePresetChange = async function (newPresetName) {
+  const tournamentRef = doc(db, "tournaments", currentTournamentId);
+
+  try {
+    await updateDoc(tournamentRef, { preset: newPresetName });
+  } catch (error) {
+    console.error("Couldn't update data in database: ", error);
+  }
+};
+
+window.closePresetsPanel=function () {
+  DB_STREAMS.stop("tournamentPreset");
+  PANELS.presetsPanel.classList.add("hidden");
+}
 //#endregion

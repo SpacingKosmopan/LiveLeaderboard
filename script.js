@@ -58,25 +58,9 @@ const DB_STREAMS = {
 };
 //#endregion
 
-//#region panels switching
-const PANELS = { ACTIVE_TOURNAMENTS: "Active Tournaments" };
-
-function switchPanel(targetPanel) {
-  DB_STREAMS.stopAll();
-
-  if (targetPanel === PANELS.ACTIVE_TOURNAMENTS) {
-    getActiveTournaments();
-  }
-}
-
-switchPanel(PANELS.ACTIVE_TOURNAMENTS);
-//#endregion
-
 const container = document.querySelector("#leaderboard-data");
 
-let unsubscribeActiveTournaments = null;
-
-function getActiveTournaments() {
+window.getActiveTournaments = function () {
   DB_STREAMS.stopAll();
 
   try {
@@ -123,7 +107,21 @@ function getActiveTournaments() {
       error,
     );
   }
+};
+
+//#region panels switching
+const PANELS = { ACTIVE_TOURNAMENTS: "Active Tournaments" };
+
+function switchPanel(targetPanel) {
+  DB_STREAMS.stopAll();
+
+  if (targetPanel === PANELS.ACTIVE_TOURNAMENTS) {
+    getActiveTournaments();
+  }
 }
+
+switchPanel(PANELS.ACTIVE_TOURNAMENTS);
+//#endregion
 
 async function getTeamsMap(currentTournamentId) {
   const teamsMap = new Map();
@@ -160,6 +158,16 @@ window.showTournamentBattles = async function (tournamentId) {
   try {
     const teamsMap = await getTeamsMap(tournamentId);
 
+    const tournamentRef = doc(db, "tournaments", tournamentId);
+    const snapshot = await getDoc(tournamentRef);
+    const tournamentData = snapshot.data();
+
+    const themeLink = document.getElementById("style-preset");
+    if (!["echoarena"].includes(tournamentData?.preset)) {
+      themeLink.setAttribute("href", `cyberglow_preset.css`);
+    } else
+      themeLink.setAttribute("href", `${tournamentData.preset}_preset.css`);
+
     const tournamentBattlesRef = collection(db, "battles");
 
     const tournamentBattlesQuery = query(
@@ -193,7 +201,7 @@ window.showTournamentBattles = async function (tournamentId) {
 
           let teamsString = "";
           teamStrings.forEach((teamString) => {
-            teamsString += `<p><strong>${teamString.teamName}</strong> - </p>${teamString.stringsArray}`;
+            teamsString += `<p><strong>${teamString.teamName}</strong></p> ${teamString.stringsArray} &nbsp;`;
           });
 
           container.insertAdjacentHTML(
@@ -234,7 +242,8 @@ window.showBattle = async function (battleId) {
           return;
         }
         container.innerHTML = "";
-        document.querySelector("#container-name").innerHTML = `BATTLE`;
+        document.querySelector("#container-name").innerHTML =
+          `BATTLE LEADERBOARD`;
 
         const battleDataRaw = querySnapshot.data();
         const battleDataRawRecords = battleDataRaw.records;
