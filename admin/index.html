@@ -56,6 +56,35 @@
       </div>
     </div>
 
+    <div id="style-presets-container" class="popup panel hidden">
+      <div id="style-preset-content" class="content">
+        <h2>Choose preset</h2>
+        <div id="presets-container">
+          <div
+            class="preset-tile active"
+            id="cyberglow-preset-tile"
+            onclick="handlePresetChange('cyberglow')"
+          >
+            <h3>Cyber Glow (default)</h3>
+            <img src="../cyberglow_preset.png" alt="cyberglow_preset" />
+          </div>
+
+          <div
+            class="preset-tile"
+            id="echoarena-preset-tile"
+            onclick="handlePresetChange('echoarena')"
+          >
+            <h3>Echo Arena</h3>
+            <img src="../echoarena_preset.png" alt="echoarena_preset" />
+          </div>
+        </div>
+
+        <button onclick="closePresetsPanel()" class="action-button">
+          Close
+        </button>
+      </div>
+    </div>
+
     <div class="bullet-echo-container">
       <div id="login-panel" class="panel hidden">
         <h1>Admin panel</h1>
@@ -106,6 +135,11 @@
           <li class="menu-element">
             <a id="invite-comanager-btn"
               ><i class="bi bi-person-add"></i> Invite co-manager</a
+            >
+          </li>
+          <li class="menu-element">
+            <a id="manage-presets-btn"
+              ><i class="bi bi-palette"></i> Manage presets</a
             >
           </li>
           <li class="menu-element">

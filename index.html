@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Live Leaderboard</title>
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="cyberglow_preset.css" id="style-preset" />
 
     <link
       rel="stylesheet"
@@ -54,10 +55,17 @@
         <div class="cyber-header">
           <div class="cyber-title-area">
             <h1 class="cyber-hero-name" id="container-name">LEADERBOARD</h1>
-            <div class="cyber-tag-wrapper">
+            <button
+              class="action-button"
+              onclick="getActiveTournaments()"
+              style="margin-right: 50px"
+            >
+              All tournaments
+            </button>
+            <!--<div class="cyber-tag-wrapper">
               <span class="cyber-tag tag-golden">ECHO ARENA</span>
               <span class="cyber-tag tag-cyan">Echo Arena</span>
-            </div>
+            </div>-->
           </div>
           <div class="cyber-deco-bar"></div>
         </div>
