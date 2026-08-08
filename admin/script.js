@@ -138,10 +138,10 @@ let loggedUser = null;
 
 // login state change
 onAuthStateChanged(auth, (user) => {
-  openPanel(PANELS.adminPanel);
-
   if (user) {
     loggedUser = user;
+
+    openPanel(PANELS.adminPanel);
 
     const userName = user.email.split("@")[0].toUpperCase();
     console.log("Logged user: ", { userName });
@@ -185,6 +185,8 @@ onAuthStateChanged(auth, (user) => {
 
     showAllTournaments();
   } else {
+    openPanel(PANELS.loginPanel);
+
     loggedUser = null;
   }
 });
