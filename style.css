@@ -19,6 +19,9 @@ body {
   min-height: 100vh;
   position: relative;
   z-index: 2;
+
+  flex-wrap: wrap;
+  gap: 20px;
 }
 
 .bullet-echo-container *,
@@ -27,6 +30,13 @@ body {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+@media (max-width: 768px) {
+  .bullet-echo-container {
+    flex-direction: column;
+    padding: 20px 10px;
+  }
 }
 
 /* * * */
