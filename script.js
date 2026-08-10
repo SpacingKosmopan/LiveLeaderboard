@@ -259,33 +259,36 @@ window.showBattle = async function (battleId) {
 
         const teamsMap = await getTeamsMap(battleDataRaw.tournamentId);
 
-        // Object -> Array
+        let teamsPoints;
 
-        const battleData = Object.values(battleDataRawRecords || {});
+        if (battleDataRawRecords) {
+          // Object -> Array
 
-        const displayData = battleData.reduce((map, battle) => {
-          if (battle && battle.data) {
-            Object.entries(battle.data).forEach(([teamId, stats]) => {
-              if (!map[teamId]) {
-                map[teamId] = {
-                  kills: [],
-                  penalty: [],
-                  placement: [],
-                  survivors: [],
-                };
-              }
+          const battleData = Object.values(battleDataRawRecords || {});
 
-              map[teamId].kills.push(stats.kills || 0);
-              map[teamId].penalty.push(stats.penalty || 0);
-              map[teamId].placement.push(stats.placement || 0);
-              map[teamId].survivors.push(stats.survivors || 0);
-            });
-          }
+          const displayData = battleData.reduce((map, battle) => {
+            if (battle && battle.data) {
+              Object.entries(battle.data).forEach(([teamId, stats]) => {
+                if (!map[teamId]) {
+                  map[teamId] = {
+                    kills: [],
+                    penalty: [],
+                    placement: [],
+                    survivors: [],
+                  };
+                }
 
-          return map;
-        }, {});
+                map[teamId].kills.push(stats.kills || 0);
+                map[teamId].penalty.push(stats.penalty || 0);
+                map[teamId].placement.push(stats.placement || 0);
+                map[teamId].survivors.push(stats.survivors || 0);
+              });
+            }
 
-        /*
+            return map;
+          }, {});
+
+          /*
         === POINTS SYSTEM ===
         🏅 Placement Points
 
@@ -302,63 +305,63 @@ window.showBattle = async function (battleId) {
         Any team found violating the tournament rules will receive a -3 Point deduction per violation. The tournament staff reserves the right to issue additional penalties or disqualifications for repeated or severe rule violations.
         */
 
-        const teamsPoints = Object.entries(displayData).map(
-          ([teamId, gamesData]) => {
-            const placementPoints = gamesData.placement.reduce(
-              // accumulator is the previous value
-              (accumulator, placement) => {
-                const points =
-                  placement === 1
-                    ? 3
-                    : placement === 2
-                      ? 2
-                      : placement === 3
-                        ? 1
-                        : 0;
+          teamsPoints = Object.entries(displayData).map(
+            ([teamId, gamesData]) => {
+              const placementPoints = gamesData.placement.reduce(
+                // accumulator is the previous value
+                (accumulator, placement) => {
+                  const points =
+                    placement === 1
+                      ? 3
+                      : placement === 2
+                        ? 2
+                        : placement === 3
+                          ? 1
+                          : 0;
 
-                return accumulator + points;
-              },
-              0, // base value
-            );
+                  return accumulator + points;
+                },
+                0, // base value
+              );
 
-            const killsPoints = gamesData.kills.reduce(
-              // accumulator is the previous value
-              (accumulator, kills) => {
-                const points = kills * 2;
+              const killsPoints = gamesData.kills.reduce(
+                // accumulator is the previous value
+                (accumulator, kills) => {
+                  const points = kills * 2;
 
-                return accumulator + points;
-              },
-              0, // base value
-            );
+                  return accumulator + points;
+                },
+                0, // base value
+              );
 
-            const penaltyPoints = gamesData.penalty.reduce(
-              // accumulator is the previous value
-              (accumulator, penalty) => {
-                return accumulator + penalty;
-              },
-              0, // base value
-            );
+              const penaltyPoints = gamesData.penalty.reduce(
+                // accumulator is the previous value
+                (accumulator, penalty) => {
+                  return accumulator + penalty;
+                },
+                0, // base value
+              );
 
-            const totalSurvivors = gamesData.survivors
-              ? gamesData.survivors.reduce((accumulator, survivors) => {
-                  return accumulator + survivors;
-                }, 0)
-              : 0;
+              const totalSurvivors = gamesData.survivors
+                ? gamesData.survivors.reduce((accumulator, survivors) => {
+                    return accumulator + survivors;
+                  }, 0)
+                : 0;
 
-            const teamData = teamsMap.get(teamId);
+              const teamData = teamsMap.get(teamId);
 
-            return {
-              teamId: teamId,
-              points: placementPoints + killsPoints - penaltyPoints,
-              players: teamData.players,
-              killsPoints,
-              placementPoints,
-              penaltyPoints,
-              totalSurvivors,
-              teamName: teamData.name,
-            };
+              return {
+                teamId: teamId,
+                points: placementPoints + killsPoints - penaltyPoints,
+                players: teamData.players,
+                killsPoints,
+                placementPoints,
+                penaltyPoints,
+                totalSurvivors,
+                teamName: teamData.name,
+              };
 
-            /*container.insertAdjacentHTML(
+              /*container.insertAdjacentHTML(
             "beforeend",
              `
             <div class="leaderboard-row rankClass">
@@ -372,8 +375,24 @@ window.showBattle = async function (battleId) {
               </div>
             </div>`,
           );*/
-          },
-        );
+            },
+          );
+        } else {
+          teamsPoints = battleDataRaw.teams.map((teamId) => {
+            const teamData = teamsMap.get(teamId);
+
+            return {
+              teamId: teamId,
+              points: 0,
+              players: teamData.players,
+              killsPoints: 0,
+              placementPoints: 0,
+              penaltyPoints: 0,
+              totalSurvivors: 0,
+              teamName: teamData.name,
+            };
+          });
+        }
 
         teamsPoints.sort((a, b) => {
           return (

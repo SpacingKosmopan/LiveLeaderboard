@@ -32,7 +32,7 @@
 
 .action-button {
   border-radius: 15px;
-  background-color: #0d0d28;
+  background-color: #0a1438;
   border: 1px solid #0f205b;
   padding: 10px;
   color: white;
@@ -96,7 +96,7 @@
 .battle-div {
   width: 100%;
   padding: 10px 0;
-  border-bottom: 1px solid white;
+  border-bottom: 2px solid #0b1436;
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
@@ -143,30 +143,69 @@
   max-width: 80%;
 }
 
+/* * --- * */
+
 .menu-list {
   list-style-type: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
+  margin: 0 auto;
+  padding: 20px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  max-width: 1000px;
+}
 
-  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+.menu-element {
+  display: block;
 }
 
 .menu-element a {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #0a1438;
   color: white;
   text-decoration: none;
-  padding: 5px 10px;
-  transition: 0.3s;
-  background-color: #0f205b;
-
-  border-radius: 20px 20px 0 0;
+  padding: 30px 20px;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .menu-element a:hover {
-  background-color: #142e90;
+  background-color: #091131;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.2);
   cursor: pointer;
 }
+
+.menu-element a i {
+  font-size: 2rem;
+  margin-bottom: 12px;
+  display: inline-block;
+}
+
+.menu-element a span {
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.menu-element a.back-to-admin-btn {
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+}
+
+.menu-element a.back-to-admin-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* * --- * */
 
 #tournaments-table {
   width: 100%;
