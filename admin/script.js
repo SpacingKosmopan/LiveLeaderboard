@@ -90,7 +90,6 @@ loginBtn.addEventListener("click", handleLogIn);
 
 //#region panels handlers
 
-const adminPanel = document.querySelector("#admin-panel");
 const PANELS = {
   loginPanel: document.querySelector("#login-panel"),
   adminPanel: document.querySelector("#admin-panel"),
@@ -154,7 +153,7 @@ onAuthStateChanged(auth, (user) => {
         <button id="see-leaderboard-btn" class="action-button"><i class="bi bi-award"></i> See leaderboard</button>
         <button id="logout-btn" class="action-button"><i class="bi bi-door-open"></i> Log out</button>
       </div> <hr />
-      <p>Your tournaments</p>
+      <p>All tournaments</p>
         <table id="tournaments-table">
           <thead>
             <tr>
@@ -170,6 +169,14 @@ onAuthStateChanged(auth, (user) => {
 
           </tbody>
         </table>
+        <hr />
+      <div style="max-width: 50%; margin: 0 auto;"><p style="text-align: center;"><strong>Glossary</strong></p>
+      <ul>
+        <li><strong>Tournament</strong> - the whole tournament. Each tournament has participants, winners and rewards.</li>
+        <li><strong>Battle</strong> - one part of the tournament, for example semifinal, quarterfinal or final. It can also mean a single group.</li>
+        <li><strong>Match / Record</strong> - a single match in a specific mode, for example Battle Royale. Each match has it's own stats. For example which placement teams took, how many kills they made etc.</li>
+      </ul>
+      </div>
     `;
     document
       .querySelector("#see-leaderboard-btn")
