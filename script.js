@@ -222,7 +222,7 @@ window.showTournamentBattles = async function (tournamentId) {
                   margin-left: auto;
                   z-index: 10;  
                 ">
-                <button class="small-action-button" onclick="showBattle('${doc.id}')"><i class="bi bi-arrow-right"></i></button>
+                <button class="small-action-button" onclick="goToPage('?battleId=${doc.id}')"><i class="bi bi-arrow-right"></i></button>
               </div>
             </div>`,
           );
@@ -237,6 +237,19 @@ window.showTournamentBattles = async function (tournamentId) {
   }
 };
 
+window.goToPage = function (href) {
+  window.location.href = href;
+};
+
+window.addEventListener("DOMContentLoaded", () => {
+  const params = new URLSearchParams(window.location.search);
+  const battleId = params.get("battleId");
+
+  if (battleId) {
+    showBattle(battleId);
+  }
+});
+
 window.showBattle = async function (battleId) {
   DB_STREAMS.stopAll();
 
@@ -250,11 +263,37 @@ window.showBattle = async function (battleId) {
           console.error("Leaderboard table not found");
           return;
         }
+
+        const battleDataRaw = querySnapshot.data();
+
+        if (!battleDataRaw) {
+          console.error("Battle data not found for ID:", battleId);
+          return;
+        }
+
+        if (!currentTournamentData) {
+          try {
+            const tournamentRef = doc(
+              db,
+              "tournaments",
+              battleDataRaw.tournamentId,
+            );
+            const tournamentSnapshot = await getDoc(tournamentRef);
+            if (tournamentSnapshot.exists()) {
+              currentTournamentData = { name: tournamentSnapshot.data().name };
+            }
+          } catch (err) {
+            console.error(
+              "Couldn't fetch tournament info for battle title:",
+              err,
+            );
+          }
+        }
+
         container.innerHTML = "";
         document.querySelector("#container-name").innerHTML =
           `${currentTournamentData.name || "BATTLE"} LEADERBOARD`;
 
-        const battleDataRaw = querySnapshot.data();
         const battleDataRawRecords = battleDataRaw.records;
 
         const teamsMap = await getTeamsMap(battleDataRaw.tournamentId);
