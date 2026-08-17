@@ -92,19 +92,30 @@
 
         <div id="login-form">
           <p>[ i ] Login and Password are given by administrator.</p>
-          <input
-            type="email"
-            name="email-input"
-            id="email-input"
-            required
-            placeholder="Email..."
-          />
-          <input
-            type="password"
-            name="password-input"
-            id="password-input"
-            placeholder="Password..."
-          />
+          <br />
+          <div class="input-group">
+            <label for="email-input" class="action-label">Login</label>
+            <input
+              type="email"
+              name="email-input"
+              id="email-input"
+              required
+              placeholder="Email..."
+              class="action-input"
+            />
+          </div>
+
+          <div class="input-group">
+            <label for="password-input" class="action-label">Password</label>
+            <input
+              type="password"
+              name="password-input"
+              id="password-input"
+              placeholder="Password..."
+              class="action-input"
+            />
+          </div>
+
           <button id="login-btn" class="action-button">Login</button>
           <p id="error-msg"></p>
         </div>
