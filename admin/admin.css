@@ -74,6 +74,31 @@
   cursor: not-allowed;
 }
 
+.action-input {
+  border-radius: 15px;
+  background-color: #0a1438;
+  border: 1px solid #0f205b;
+  padding: 10px;
+  color: white;
+  font-family: inherit;
+  font-weight: bold;
+  text-transform: uppercase;
+  transition: 0.1s ease-in-out;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 15px;
+}
+
+.action-label {
+  color: white;
+  font-family: inherit;
+  font-size: 14px;
+}
+
 .bullet-echo-container {
   flex-direction: column;
 }
