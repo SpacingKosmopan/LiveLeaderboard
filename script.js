@@ -33,8 +33,8 @@ onAuthStateChanged(auth, (user) => {
     const userName = user.email.split("@")[0].toUpperCase();
     console.log("Logged user: ", { userName });
 
-    document.querySelector("header").innerHTML =
-      `<p>Logged as: ${userName}. Click to see admin panel: <a href="./admin/index.html">admin</a></p>`;
+    /*document.querySelector("header").innerHTML =
+      `<p>Logged as: ${userName}. Click to see admin panel: <a href="./admin/index.html">admin</a></p>`;*/
   } else document.querySelector("header").innerHTML = ``;
 });
 
