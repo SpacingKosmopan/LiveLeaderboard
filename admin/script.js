@@ -805,6 +805,8 @@ async function openAddBattlePanel() {
 
   beginBattleButton.disabled = true;
 
+  selectedTeams = [];
+
   const teamsRef = collection(db, "teams");
   const teamsQuery = query(
     teamsRef,
