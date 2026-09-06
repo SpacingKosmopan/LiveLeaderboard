@@ -161,6 +161,12 @@
             </a>
           </li>
           <li class="menu-element">
+            <a id="statistics-btn">
+              <i class="bi-bar-chart-line"></i>
+              <span>Check statistics</span>
+            </a>
+          </li>
+          <li class="menu-element">
             <a class="back-to-admin-btn">
               <i class="bi bi-arrow-left"></i>
               <span>Go back</span>
@@ -216,6 +222,15 @@
         <div class="battle-table-container">
           <table id="battle-records-table" class="battle-table"></table>
         </div>
+      </div>
+
+      <div id="statistics-panel" class="hidden panel">
+        <h1>Statistics</h1>
+        <button class="back-to-tournament-btn action-button">
+          <i class="bi bi-arrow-left"></i> Go back
+        </button>
+        <p id="stats-teams-number"></p>
+        <div id="teams-stats"></div>
       </div>
     </div>
 
