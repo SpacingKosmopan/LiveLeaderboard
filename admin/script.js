@@ -1368,13 +1368,28 @@ async function showStatisticsPanel() {
                     matchesPlayed: 0,
                     matchesWon: 0,
                     survivors: 0,
+                    totalPoints: 0,
                   };
                 }
+
+                const placementPoints =
+                  stats.placement === 1
+                    ? 3
+                    : stats.placement === 2
+                      ? 2
+                      : stats.placement === 3
+                        ? 1
+                        : 0;
+
+                const killsPoints = (stats.kills || 0) * 2;
+                const penaltyPoints = stats.penalty || 0;
 
                 teamsStats[teamId].matchesPlayed++;
                 teamsStats[teamId].kills += stats.kills || 0;
                 teamsStats[teamId].penalty += stats.penalty || 0;
                 teamsStats[teamId].survivors += stats.survivors || 0;
+                teamsStats[teamId].totalPoints +=
+                  placementPoints + killsPoints - penaltyPoints;
 
                 if (stats.placement === 1) {
                   teamsStats[teamId].matchesWon += 1;
@@ -1421,7 +1436,7 @@ async function renderTeamsStats(teamsStats) {
 
     const teamStats = document.createElement("div");
     teamStats.className = "team-stats-team-stats";
-    teamStats.innerHTML = `Kills: ${stats.kills} | Penalty: ${stats.penalty} | Matches played: ${stats.matchesPlayed} | Matches won: ${stats.matchesWon} | Total survivors: ${stats.survivors}`;
+    teamStats.innerHTML = `Kills: ${stats.kills} | Penalty: ${stats.penalty} | Matches played: ${stats.matchesPlayed} | Matches won: ${stats.matchesWon} | Total points: ${stats.totalPoints} | Total survivors: ${stats.survivors}`;
     teamEntry.appendChild(teamStats);
 
     teamsDiv.append(teamEntry);
