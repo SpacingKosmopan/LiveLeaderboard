@@ -478,3 +478,17 @@
     gap: 12px;
   }
 }
+
+.team-stats-entry {
+  border-radius: 15px;
+  padding: 15px;
+  border: 2px solid #0b1436;
+  color: white;
+  margin-top: 10px;
+  background-color: #0a1438;
+}
+
+.team-stats-team-info {
+  font-weight: 500;
+  font-size: 1.2rem;
+}

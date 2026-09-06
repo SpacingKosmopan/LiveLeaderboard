@@ -97,6 +97,7 @@ const PANELS = {
   battlesPanel: document.querySelector("#battles-panel"),
   tournamentPanel: document.querySelector("#tournament-panel"),
   battleGamePanel: document.querySelector("#battle-game-panel"),
+  statisticsPanel: document.querySelector("#statistics-panel"),
 
   addPlayerToTeam: document.querySelector("#new-player-form-container"),
   createBattle: document.querySelector("#new-battle-form-container"),
@@ -131,6 +132,9 @@ addEventListener("DOMContentLoaded", (event) => {
   document
     .querySelector("#manage-presets-btn")
     .addEventListener("click", showPresetsPanel);
+  document
+    .querySelector("#statistics-btn")
+    .addEventListener("click", showStatisticsPanel);
 });
 
 let loggedUser = null;
@@ -1317,4 +1321,113 @@ window.closePresetsPanel = function () {
   DB_STREAMS.stop("tournamentPreset");
   PANELS.presetsPanel.classList.add("hidden");
 };
+//#endregion
+
+//#region statistics
+async function showStatisticsPanel() {
+  if (!loggedUser) {
+    console.warn("User is not logged in");
+    return;
+  }
+
+  openPanel(PANELS.statisticsPanel);
+
+  try {
+    //* 1. Get all battles from this (current) tournament
+    const battlesRef = collection(db, "battles");
+    const tournamentQuery = query(
+      battlesRef,
+      where("tournamentId", "==", currentTournamentId),
+    );
+
+    DB_STREAMS.start(
+      "tournamentStatistics",
+      onSnapshot(
+        tournamentQuery,
+        (querySnapshot) => {
+          // object (key-value), array ([0,1,2])
+          let teamsStats = {};
+
+          querySnapshot.forEach((doc) => {
+            const docData = doc.data();
+            if (!docData.records) return;
+
+            // array of matches (records) in a single battle
+            const battleRecords = Object.values(docData.records).flatMap(
+              (record) => record.data,
+            );
+
+            //* Assign teams data to single array
+
+            battleRecords.forEach((record) => {
+              Object.entries(record).forEach(([teamId, stats]) => {
+                if (!teamsStats[teamId]) {
+                  teamsStats[teamId] = {
+                    kills: 0,
+                    penalty: 0,
+                    matchesPlayed: 0,
+                    matchesWon: 0,
+                    survivors: 0,
+                  };
+                }
+
+                teamsStats[teamId].matchesPlayed++;
+                teamsStats[teamId].kills += stats.kills || 0;
+                teamsStats[teamId].penalty += stats.penalty || 0;
+                teamsStats[teamId].survivors += stats.survivors || 0;
+
+                if (stats.placement === 1) {
+                  teamsStats[teamId].matchesWon += 1;
+                }
+              });
+            });
+          });
+
+          renderTeamsStats(teamsStats);
+        },
+        (error) => {
+          console.error("Error tournaments listening: ", error);
+        },
+      ),
+    );
+  } catch (error) {
+    console.error("Couldn't get data from database: ", error);
+  }
+}
+
+async function renderTeamsStats(teamsStats) {
+  const teamsDiv = PANELS.statisticsPanel.querySelector("#teams-stats");
+  if (!teamsDiv) {
+    console.error("No teams div found");
+    return;
+  }
+  teamsDiv.innerHTML = ``;
+
+  const teamsData = await getTeamsMap();
+
+  let teamsNumber = 0;
+
+  Object.entries(teamsStats).forEach(([teamId, stats]) => {
+    teamsNumber++;
+    const teamEntry = document.createElement("div");
+    teamEntry.className = "team-stats-entry";
+
+    const teamInfo = document.createElement("div");
+    teamInfo.className = "team-stats-team-info";
+    const currentTeamInfo = teamsData.get(teamId);
+    teamInfo.innerHTML = `${currentTeamInfo.name} ${getPlayersString(currentTeamInfo.players)}`;
+
+    teamEntry.appendChild(teamInfo);
+
+    const teamStats = document.createElement("div");
+    teamStats.className = "team-stats-team-stats";
+    teamStats.innerHTML = `Kills: ${stats.kills} | Penalty: ${stats.penalty} | Matches played: ${stats.matchesPlayed} | Matches won: ${stats.matchesWon} | Total survivors: ${stats.survivors}`;
+    teamEntry.appendChild(teamStats);
+
+    teamsDiv.append(teamEntry);
+  });
+
+  PANELS.statisticsPanel.querySelector("#stats-teams-number").innerHTML =
+    `Number of teams: ${teamsNumber}`;
+}
 //#endregion
